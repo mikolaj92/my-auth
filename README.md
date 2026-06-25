@@ -2,19 +2,26 @@
 
 Minimalny rdzeń passkey-only auth do współdzielenia między projektami typu FastAPI/Starlette/Jinja bez przepisywania WebAuthn od zera.
 
-V0 celowo **nie** zawiera routerów, middleware, panelu admina ani systemu sesji. Każdy projekt ma już swoje sesje, bazę i layout. Ten pakiet daje tylko:
+Rdzeń celowo **nie** zawiera middleware, panelu admina ani systemu sesji. Każdy projekt ma już swoje sesje, bazę i layout. Ten pakiet daje:
 
 - konfigurację RP (`rp_id`, `rp_name`, `origin`) trzymaną po stronie serwera,
 - generowanie opcji register/login przez `webauthn`,
 - weryfikację register/login przez `webauthn`,
 - jednorazowe challenge z TTL,
 - modele `PasskeyUser` / `PasskeyCredential` i protokół storage,
+- opcjonalny router FastAPI sklejający typowe endpointy z hookami aplikacji,
 - mały vanilla JS helper do `navigator.credentials.create/get`.
 
 ## Instalacja z GitHuba
 
 ```bash
 uv add "git+https://github.com/mikolaj92/my-auth"
+```
+
+Z adapterem FastAPI:
+
+```bash
+uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth"
 ```
 
 Albo lokalnie podczas pracy:
@@ -45,6 +52,97 @@ passkeys = PasskeyService(
     credentials=my_storage_adapter,    # implementuje CredentialStore
 )
 ```
+
+## FastAPI adapter
+
+Adapter daje gotowy kształt tras i ciasteczko flow id dla challenge. Sesja aplikacji, polityka rejestracji i renderowanie stron dalej są po stronie projektu przez hooki.
+
+Domyślne trasy:
+
+- `GET /login`
+- `GET /register`
+- `POST /logout`
+- `POST /api/auth/login/options`
+- `POST /api/auth/login/verify`
+- `POST /api/auth/register/options`
+- `POST /api/auth/register/verify`
+
+```python
+from fastapi import FastAPI, Request, Response
+from starlette.responses import HTMLResponse
+
+from my_auth import PasskeyCredential, PasskeyUser
+from my_auth.fastapi import AuthUser, PasskeyAuthRouter, PasskeyRouteHooks
+
+
+async def get_session_user(request: Request) -> AuthUser | None:
+    user_id = request.session.get("user_id")
+    return await users.get_passkey_user(user_id) if user_id else None
+
+
+async def make_registration_user(request: Request, display_name: str) -> AuthUser:
+    # Twórz tylko dla bootstrap/invite flow zaakceptowanego przez registration_allowed.
+    return PasskeyUser(
+        user_id=await users.next_user_id(),
+        user_handle=await users.random_user_handle(),
+        name=display_name,
+        display_name=display_name,
+    )
+
+
+async def get_auth_user(user_id: str) -> AuthUser | None:
+    return await users.get_passkey_user(user_id)
+
+
+async def login(response: Response, request: Request, user: AuthUser) -> None:
+    request.session.clear()  # prevent session fixation
+    request.session["user_id"] = user.user_id
+
+
+async def logout(response: Response, request: Request) -> None:
+    request.session.clear()
+
+
+async def registration_allowed(request: Request) -> bool:
+    return bool(request.session.get("invite_ok") or request.session.get("user_id"))
+
+
+def render_login(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "login.html")
+
+
+def render_register(request: Request, *, bootstrap: bool) -> HTMLResponse:
+    return templates.TemplateResponse(request, "register.html", {"bootstrap": bootstrap})
+
+
+async def after_register(
+    request: Request,
+    user: AuthUser,
+    credential: PasskeyCredential,
+) -> None:
+    await audit.log("passkey.register", user.user_id, credential.id_b64url)
+
+
+app = FastAPI()
+app.include_router(
+    PasskeyAuthRouter(
+        service=passkeys,
+        hooks=PasskeyRouteHooks(
+            get_session_user=get_session_user,
+            make_registration_user=make_registration_user,
+            get_auth_user=get_auth_user,
+            login=login,
+            logout=logout,
+            registration_allowed=registration_allowed,
+            render_login=render_login,
+            render_register=render_register,
+            after_register=after_register,
+        ),
+    ).router
+)
+```
+
+Challenge flow id siedzi w ciasteczku `passkey_challenge` (`HttpOnly`, `Secure`, `SameSite=Lax`, TTL z `PasskeyConfig.challenge_ttl_seconds`). Adapter usuwa legacy `response.userHandle` przy loginie, bo część przeglądarek nadal potrafi go wysłać mimo discoverable credentials.
 
 Route-shape dla FastAPI/Starlette:
 
@@ -137,6 +235,10 @@ Skopiuj albo wystaw `src/my_auth/static/passkey.js` i użyj:
   import { loginPasskey, registerPasskey } from "/static/passkey.js";
 
   document.querySelector("#login").addEventListener("click", () => loginPasskey());
-  document.querySelector("#register").addEventListener("click", () => registerPasskey());
+  document.querySelector("#register").addEventListener("click", () =>
+    registerPasskey({ displayName: document.querySelector("#display-name").value }),
+  );
 </script>
 ```
+
+Dla zalogowanego użytkownika dodającego kolejną passkey możesz wywołać `registerPasskey()` bez `displayName`, bo adapter użyje użytkownika z `get_session_user`.
