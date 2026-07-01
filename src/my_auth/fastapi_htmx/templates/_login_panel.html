@@ -1,0 +1,36 @@
+<section class="card passkey-card" aria-labelledby="passkey-page-title">
+  <div class="card-header passkey-card__header">
+    <p class="badge passkey-eyebrow">Passkey sign in</p>
+    <h1 id="passkey-page-title" class="card-title">Sign in without a password</h1>
+    <p class="card-description">
+      Use your device passkey prompt to continue. This page keeps WebAuthn API responses as JSON.
+    </p>
+  </div>
+  <div class="card-content passkey-card__content">
+    <form
+      id="passkey-login-form"
+      class="passkey-form"
+      method="post"
+      action="{{ paths.login_verify }}"
+      data-passkey-form="login"
+      data-options-url="{{ paths.login_options }}"
+      data-verify-url="{{ paths.login_verify }}"
+      data-status-target="{{ login_error_target_id }}"
+      data-csrf-header="{{ csrf_header_name }}"
+      {% if csrf_token %}data-csrf-token="{{ csrf_token }}"{% endif %}
+      {% if login_success_url %}data-success-url="{{ login_success_url }}"{% endif %}
+      hx-target="#{{ login_error_target_id }}"
+      hx-swap="innerHTML"
+    >
+      <button class="btn btn-primary passkey-primary-action" type="submit">Continue with passkey</button>
+    </form>
+    {% set target_id = login_error_target_id %}
+    {% set status_message = "Waiting for the WebAuthn passkey prompt." %}
+    {% include "_passkey_status.html" %}
+    <noscript>
+      <p class="alert passkey-status" role="status">
+        WebAuthn passkeys require JavaScript and a browser with PublicKeyCredential support.
+      </p>
+    </noscript>
+  </div>
+</section>

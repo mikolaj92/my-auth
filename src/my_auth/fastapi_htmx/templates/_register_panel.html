@@ -1,0 +1,49 @@
+<section class="card passkey-card" aria-labelledby="passkey-page-title">
+  <div class="card-header passkey-card__header">
+    <p class="badge passkey-eyebrow">Passkey registration</p>
+    <h1 id="passkey-page-title" class="card-title">Create a passkey</h1>
+    <p class="card-description">
+      {% if bootstrap %}
+        Start by creating a passkey for this account.
+      {% else %}
+        Add a passkey to the current account without changing host registration policy.
+      {% endif %}
+    </p>
+  </div>
+  <div class="card-content passkey-card__content">
+    <form
+      id="passkey-register-form"
+      class="passkey-form"
+      method="post"
+      action="{{ paths.register_verify }}"
+      data-passkey-form="register"
+      data-options-url="{{ paths.register_options }}"
+      data-verify-url="{{ paths.register_verify }}"
+      data-status-target="{{ register_error_target_id }}"
+      data-csrf-header="{{ csrf_header_name }}"
+      {% if csrf_token %}data-csrf-token="{{ csrf_token }}"{% endif %}
+      {% if register_success_url %}data-success-url="{{ register_success_url }}"{% endif %}
+      hx-target="#{{ register_error_target_id }}"
+      hx-swap="innerHTML"
+    >
+      <label class="label" for="passkey-display-name">Display name</label>
+      <input
+        id="passkey-display-name"
+        class="input"
+        name="display_name"
+        autocomplete="name"
+        placeholder="Your name"
+        required
+      >
+      <button class="btn btn-primary passkey-primary-action" type="submit">Create passkey</button>
+    </form>
+    {% set target_id = register_error_target_id %}
+    {% set status_message = "Waiting for registration details." %}
+    {% include "_passkey_status.html" %}
+    <noscript>
+      <p class="alert passkey-status" role="status">
+        WebAuthn passkeys require JavaScript and a browser with PublicKeyCredential support.
+      </p>
+    </noscript>
+  </div>
+</section>
