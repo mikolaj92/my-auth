@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Passkey authentication{% endblock %}</title>
+    <link rel="stylesheet" href="{{ passkey_css_url }}">
+  </head>
+  <body class="passkey-ui">
+    <main class="passkey-shell" aria-labelledby="passkey-page-title">
+      {% block content %}{% endblock %}
+    </main>
+    <script type="module" src="{{ passkey_js_url }}"></script>
+  </body>
+</html>
