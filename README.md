@@ -10,25 +10,41 @@ Rdzeń celowo **nie** zawiera middleware, panelu admina ani systemu sesji. Każd
 - jednorazowe challenge z TTL,
 - modele `PasskeyUser` / `PasskeyCredential` i protokół storage,
 - opcjonalny router FastAPI sklejający typowe endpointy z hookami aplikacji,
+- opcjonalny adapter `my_auth.fastapi_htmx` dla serwerowo renderowanych
+  stron FastAPI/Jinja/HTMX/Basecoat,
 - mały vanilla JS helper do `navigator.credentials.create/get`.
+
+`my-auth` jest publicznym projektem open-source na licencji MIT:
+<https://github.com/mikolaj92/my-auth>.
 
 ## Instalacja z GitHuba
 
 ```bash
-uv add "git+https://github.com/mikolaj92/my-auth"
+uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"
 ```
 
 Z adapterem FastAPI:
 
 ```bash
-uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth"
+uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git"
+```
+
+Z opcjonalnym adapterem FastAPI/Jinja/HTMX UI:
+
+```bash
+uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git"
 ```
 
 Albo lokalnie podczas pracy:
 
 ```bash
-uv add --editable /Users/mini-m4-main/Developer/my-auth
+uv add --editable /Users/mini-m4-1/Developer/my-auth
+uv sync --dev
+uv run pytest
 ```
+
+Wszystkie komendy w dokumentacji używają `uv` (`uv add`, `uv sync`,
+`uv run`).
 
 ## Minimalny backend
 
@@ -143,6 +159,123 @@ app.include_router(
 ```
 
 Challenge flow id siedzi w ciasteczku `passkey_challenge` (`HttpOnly`, `Secure`, `SameSite=Lax`, TTL z `PasskeyConfig.challenge_ttl_seconds`). Adapter usuwa legacy `response.userHandle` przy loginie, bo część przeglądarek nadal potrafi go wysłać mimo discoverable credentials.
+
+Wyjątek od zasady host-owned cookies dotyczy tylko istniejącego flow
+WebAuthn: `PasskeyAuthRouter` zarządza ciasteczkami challenge
+`passkey_challenge` oraz `passkey_register_name`. Te ciasteczka służą do
+jednorazowych opcji/weryfikacji WebAuthn. Adaptery nie przejmują własności
+produkcyjnych sesji aplikacji ani app cookies.
+
+## FastAPI/Jinja/HTMX UI adapter
+
+Extra `fastapi-htmx` dodaje opt-in adapter `my_auth.fastapi_htmx` dla
+serwerowo renderowanych stron passkey. Root import pozostaje lekki:
+`import my_auth` nie importuje FastAPI, Starlette, Jinja ani zasobów UI.
+Importuj adapter jawnie tylko w hostach, które zainstalowały extra:
+
+```python
+from fastapi import FastAPI
+from my_auth.fastapi import PasskeyRouteHooks
+from my_auth.fastapi_htmx import (
+    PasskeyUiConfig,
+    PasskeyUiRouter,
+    create_passkey_ui_router,
+    passkey_ui_static_files,
+)
+
+app = FastAPI()
+hooks = PasskeyRouteHooks(
+    get_session_user=get_session_user,
+    make_registration_user=make_registration_user,
+    get_auth_user=get_auth_user,
+    login=login,
+    logout=logout,
+    registration_allowed=registration_allowed,
+    render_login=render_login_placeholder,
+    render_register=render_register_placeholder,
+    after_register=after_register,
+    after_login=after_login,
+)
+
+passkey_ui: PasskeyUiRouter = create_passkey_ui_router(
+    service=passkeys,
+    hooks=hooks,
+    config=PasskeyUiConfig(
+        login_success_url="/account",
+        register_success_url="/account",
+    ),
+)
+app.include_router(passkey_ui.router)
+app.mount(
+    passkey_ui.static_mount_path,
+    passkey_ui.static_files,
+    name="my_auth_fastapi_htmx_static",
+)
+```
+
+`create_passkey_ui_router` zwraca obiekt z polami `router`,
+`static_mount_path` i `static_files`. Host montuje statyczne pliki jawnie
+przez zwrócone `static_mount_path` oraz `static_files`. Jeśli potrzebujesz
+samego obiektu `StaticFiles`, publiczny helper `passkey_ui_static_files()`
+zwraca mount dla pakietowych `passkey-ui.js`, `passkey.js` i
+`passkey-ui.css`.
+
+`PasskeyUiConfig` pozwala zmienić `paths`, `cookies`, `static_mount_path`,
+`static_url_path`, `passkey_js_url`, CSRF header/token metadata, redirecty po
+sukcesie oraz template overrides. `/api/auth/*` nadal pozostaje JSON API z
+`PasskeyAuthRouter`; HTMX/Jinja dotyczy stron i fragmentów UI, nie formatu
+WebAuthn verify/options.
+
+### Nadpisywanie templatek
+
+Template loader wybierany jest deterministycznie:
+
+1. Jeśli podasz `template_loader`, custom Jinja loader wygrywa.
+2. W przeciwnym razie `template_override_directory` tworzy `ChoiceLoader`, w
+   którym katalog hosta ma pierwszeństwo, a pakietowe templaty są fallbackiem.
+3. Bez obu opcji używane są wyłącznie pakietowe templaty.
+4. Podanie jednocześnie `template_loader` i `template_override_directory` jest
+   niepoprawne i kończy się `ValueError`.
+
+Przykład katalogu override:
+
+```python
+from pathlib import Path
+from my_auth.fastapi_htmx import PasskeyUiConfig
+
+config = PasskeyUiConfig(
+    template_override_directory=Path("app/templates/my_auth_fastapi_htmx"),
+)
+```
+
+Przykład pełnego custom loadera:
+
+```python
+from jinja2 import DictLoader
+from my_auth.fastapi_htmx import PasskeyUiConfig
+
+config = PasskeyUiConfig(
+    template_loader=DictLoader({"login.html": "<main>Custom login</main>"}),
+)
+```
+
+### WebAuthn i bezpieczeństwo hosta
+
+Passkeys wymagają bezpiecznego kontekstu przeglądarki: HTTPS w produkcji albo
+lokalny secure context, np. `localhost` podczas developmentu. UI powinien mieć
+normalny fallback/komunikat dla przeglądarek bez obsługi WebAuthn.
+
+Host aplikacji nadal jest właścicielem: sessions, app cookies, CSRF
+validation, persistence, registration policy, local user provisioning, admin
+checks, role/grant changes, audit logging, redirects oraz logout effects.
+Security ownership checklist: sessions; app cookies; CSRF validation;
+persistence; registration policy; local user provisioning; admin checks;
+role/grant changes; audit logging; redirects; logout effects.
+Adapter passkey UI nie tworzy produkcyjnej sesji, nie zapisuje użytkowników,
+nie nadaje ról, nie zmienia grantów i nie implementuje polityki admina.
+
+Adapter jest bez React, shadcn, Tailwind, npm, bundlera i SPA. To
+server-rendered FastAPI/Jinja/HTMX/Basecoat plus małe moduły vanilla JS.
 
 Route-shape dla FastAPI/Starlette:
 
