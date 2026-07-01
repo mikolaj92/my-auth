@@ -1,0 +1,48 @@
+.passkey-ui {
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+.passkey-shell {
+  box-sizing: border-box;
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: var(--passkey-shell-padding, 1.5rem);
+}
+
+.passkey-card {
+  width: min(100%, var(--passkey-card-width, 28rem));
+}
+
+.passkey-card__header,
+.passkey-card__content,
+.passkey-form {
+  display: grid;
+  gap: var(--passkey-panel-gap, 1rem);
+}
+
+.passkey-eyebrow {
+  width: fit-content;
+}
+
+.passkey-primary-action {
+  width: 100%;
+}
+
+.passkey-status {
+  overflow-wrap: anywhere;
+}
+
+.passkey-status[data-state="success"] {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.passkey-status[data-state="error"] {
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
