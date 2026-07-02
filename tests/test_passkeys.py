@@ -13,6 +13,7 @@ from my_auth import (
     PasskeyCredential,
     PasskeyService,
     PasskeyUser,
+    SQLiteChallengeStore,
     UserHandleMismatch,
 )
 from my_auth.passkeys import bytes_to_b64url
@@ -162,6 +163,97 @@ def test_config_rejects_client_supplied_origin_as_rp_id() -> None:
 def test_config_rejects_fake_localhost_http_origin() -> None:
     with pytest.raises(ValueError, match="origin"):
         PasskeyConfig(rp_id="localhost", rp_name="Demo", origin="http://localhost.evil.com")
+
+
+def test_sqlite_store_pops_valid_challenge_with_user(tmp_path) -> None:
+    store = SQLiteChallengeStore(tmp_path / "challenges.db")
+    user = PasskeyUser(user_id="u1", user_handle=b"handle", name="mikolaj", display_name="Mikołaj")
+
+    store.save(key="invite-1", kind="registration", challenge=b"abc", ttl_seconds=300, user=user)
+    record = store.pop(key="invite-1", kind="registration")
+
+    assert record.challenge == b"abc"
+    assert record.kind == "registration"
+    assert record.user == user
+
+
+def test_sqlite_store_challenge_is_single_use(tmp_path) -> None:
+    store = SQLiteChallengeStore(tmp_path / "challenges.db")
+    store.save(key="login-1", kind="authentication", challenge=b"abc", ttl_seconds=300)
+
+    store.pop(key="login-1", kind="authentication")
+
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="login-1", kind="authentication")
+
+
+def test_sqlite_store_rejects_missing_challenge(tmp_path) -> None:
+    store = SQLiteChallengeStore(tmp_path / "challenges.db")
+
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="never-saved", kind="authentication")
+
+
+def test_sqlite_store_rejects_expired_challenge_and_consumes_it(tmp_path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store = SQLiteChallengeStore(tmp_path / "challenges.db", now=lambda: now)
+    store.save(key="flow", kind="authentication", challenge=b"abc", ttl_seconds=1)
+
+    now += timedelta(seconds=2)
+
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="flow", kind="authentication")
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="flow", kind="authentication")
+
+
+def test_sqlite_store_is_shared_between_instances_like_workers(tmp_path) -> None:
+    path = tmp_path / "challenges.db"
+    worker1 = SQLiteChallengeStore(path)
+    worker2 = SQLiteChallengeStore(path)
+
+    worker1.save(key="login-1", kind="authentication", challenge=b"abc", ttl_seconds=300)
+    record = worker2.pop(key="login-1", kind="authentication")
+
+    assert record.challenge == b"abc"
+    with pytest.raises(ChallengeNotFound):
+        worker1.pop(key="login-1", kind="authentication")
+
+
+def test_sqlite_store_separates_kinds_for_same_key(tmp_path) -> None:
+    store = SQLiteChallengeStore(tmp_path / "challenges.db")
+    store.save(key="flow", kind="registration", challenge=b"reg", ttl_seconds=300)
+    store.save(key="flow", kind="authentication", challenge=b"auth", ttl_seconds=300)
+
+    assert store.pop(key="flow", kind="registration").challenge == b"reg"
+    assert store.pop(key="flow", kind="authentication").challenge == b"auth"
+
+
+def test_sqlite_store_cleanup_removes_only_expired(tmp_path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store = SQLiteChallengeStore(tmp_path / "challenges.db", now=lambda: now)
+    store.save(key="old", kind="authentication", challenge=b"old", ttl_seconds=1)
+    store.save(key="fresh", kind="authentication", challenge=b"fresh", ttl_seconds=600)
+
+    now += timedelta(seconds=2)
+
+    assert store.cleanup_expired() == 1
+    assert store.pop(key="fresh", kind="authentication").challenge == b"fresh"
+
+
+def test_passkey_service_works_with_sqlite_challenge_store(tmp_path) -> None:
+    passkeys = PasskeyService(
+        config=PasskeyConfig(rp_id="localhost", rp_name="Demo", origin="http://localhost:8000"),
+        challenges=SQLiteChallengeStore(tmp_path / "challenges.db"),
+        credentials=MemoryCredentialStore(),
+    )
+    user = PasskeyUser(user_id="u1", user_handle=b"stable-user-handle", name="mikolaj")
+
+    options = passkeys.begin_registration(flow_id="invite-1", user=user)
+
+    assert options["rp"]["id"] == "localhost"
+    record = passkeys.challenges.pop(key="invite-1", kind="registration")
+    assert record.user == user
 
 
 def test_memory_store_allows_multiple_passkeys_per_user() -> None:

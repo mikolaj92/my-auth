@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import Iterable, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, Literal, Protocol
 from urllib.parse import urlparse
 
@@ -193,6 +196,20 @@ class CredentialStore(Protocol):
     ) -> PasskeyCredential: ...
 
 
+class ChallengeStore(Protocol):
+    def save(
+        self,
+        *,
+        key: str,
+        kind: ChallengeKind,
+        challenge: bytes,
+        ttl_seconds: int,
+        user: PasskeyUser | None = None,
+    ) -> ChallengeRecord: ...
+
+    def pop(self, *, key: str, kind: ChallengeKind) -> ChallengeRecord: ...
+
+
 class MemoryChallengeStore:
     def __init__(self, *, now: Any | None = None) -> None:
         self._records: dict[tuple[str, ChallengeKind], ChallengeRecord] = {}
@@ -222,6 +239,108 @@ class MemoryChallengeStore:
         if record is None or record.expires_at <= self._now():
             raise ChallengeNotFound(f"missing or expired {kind} challenge")
         return record
+
+
+class SQLiteChallengeStore:
+    """Shared challenge store safe for multi-process/multi-worker deployments.
+
+    Challenges are consumed atomically (single ``DELETE ... RETURNING``), so a
+    challenge can never be verified twice, even across workers.
+    """
+
+    def __init__(self, path: str | Path, *, now: Any | None = None) -> None:
+        self._path = str(path)
+        self._now = now or (lambda: datetime.now(UTC))
+        with self._connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS passkey_challenges (
+                    key TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    challenge BLOB NOT NULL,
+                    expires_at REAL NOT NULL,
+                    user_json TEXT,
+                    PRIMARY KEY (key, kind)
+                )
+                """
+            )
+
+    @contextmanager
+    def _connect(self):
+        conn = sqlite3.connect(self._path, timeout=5.0)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
+    def save(
+        self,
+        *,
+        key: str,
+        kind: ChallengeKind,
+        challenge: bytes,
+        ttl_seconds: int,
+        user: PasskeyUser | None = None,
+    ) -> ChallengeRecord:
+        expires_at = self._now() + timedelta(seconds=ttl_seconds)
+        user_json = None
+        if user is not None:
+            user_json = json.dumps(
+                {
+                    "user_id": user.user_id,
+                    "user_handle": bytes_to_b64url(user.user_handle),
+                    "name": user.name,
+                    "display_name": user.display_name,
+                }
+            )
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO passkey_challenges (key, kind, challenge, expires_at, user_json)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (key, kind, challenge, expires_at.timestamp(), user_json),
+            )
+        return ChallengeRecord(challenge=challenge, kind=kind, key=key, expires_at=expires_at, user=user)
+
+    def pop(self, *, key: str, kind: ChallengeKind) -> ChallengeRecord:
+        with self._connect() as conn:
+            row = conn.execute(
+                "DELETE FROM passkey_challenges WHERE key = ? AND kind = ?"
+                " RETURNING challenge, expires_at, user_json",
+                (key, kind),
+            ).fetchone()
+        if row is None:
+            raise ChallengeNotFound(f"missing or expired {kind} challenge")
+        challenge, expires_at_ts, user_json = row
+        expires_at = datetime.fromtimestamp(expires_at_ts, tz=UTC)
+        if expires_at <= self._now():
+            raise ChallengeNotFound(f"missing or expired {kind} challenge")
+        user = None
+        if user_json is not None:
+            data = json.loads(user_json)
+            user = PasskeyUser(
+                user_id=data["user_id"],
+                user_handle=b64url_to_bytes(data["user_handle"]),
+                name=data["name"],
+                display_name=data["display_name"],
+            )
+        return ChallengeRecord(
+            challenge=bytes(challenge),
+            kind=kind,
+            key=key,
+            expires_at=expires_at,
+            user=user,
+        )
+
+    def cleanup_expired(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM passkey_challenges WHERE expires_at <= ?",
+                (self._now().timestamp(),),
+            )
+            return cursor.rowcount
 
 
 class MemoryCredentialStore:
@@ -270,7 +389,7 @@ class PasskeyService:
         self,
         *,
         config: PasskeyConfig,
-        challenges: MemoryChallengeStore,
+        challenges: ChallengeStore,
         credentials: CredentialStore,
     ) -> None:
         self.config = config

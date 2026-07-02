@@ -2,6 +2,7 @@ from .passkeys import (
     AuthenticationResult,
     ChallengeNotFound,
     ChallengeRecord,
+    ChallengeStore,
     CredentialNotFound,
     CredentialStore,
     MemoryChallengeStore,
@@ -10,6 +11,7 @@ from .passkeys import (
     PasskeyCredential,
     PasskeyService,
     PasskeyUser,
+    SQLiteChallengeStore,
     UserHandleMismatch,
 )
 
@@ -17,6 +19,7 @@ __all__ = [
     "AuthenticationResult",
     "ChallengeNotFound",
     "ChallengeRecord",
+    "ChallengeStore",
     "CredentialNotFound",
     "CredentialStore",
     "MemoryChallengeStore",
@@ -25,5 +28,6 @@ __all__ = [
     "PasskeyCredential",
     "PasskeyService",
     "PasskeyUser",
+    "SQLiteChallengeStore",
     "UserHandleMismatch",
 ]

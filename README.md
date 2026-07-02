@@ -53,6 +53,26 @@ passkeys = PasskeyService(
 )
 ```
 
+## Challenge storage: memory vs shared
+
+`MemoryChallengeStore` trzyma challenge w pamięci procesu, więc jest bezpieczny **tylko** przy jednym workerze (`WORKERS=1`). Przy wielu workerach (uvicorn/gunicorn `--workers N`) request `options` i `verify` mogą trafić do różnych procesów i login/rejestracja losowo padnie z `ChallengeNotFound`.
+
+Dla wielu workerów użyj współdzielonego `SQLiteChallengeStore`:
+
+```python
+from my_auth import SQLiteChallengeStore
+
+passkeys = PasskeyService(
+    config=config,
+    challenges=SQLiteChallengeStore("/var/lib/myapp/passkey_challenges.db"),
+    credentials=my_storage_adapter,
+)
+```
+
+- Konsumpcja challenge jest atomowa (`DELETE ... RETURNING`), więc challenge jest jednorazowy także między procesami.
+- Wygasłe challenge są odrzucane przy `pop`; `cleanup_expired()` usuwa stare wpisy (możesz wołać okresowo albo przy starcie).
+- Własny backend (np. Redis) podłączysz implementując protokół `ChallengeStore` (`save` / `pop`).
+
 ## FastAPI adapter
 
 Adapter daje gotowy kształt tras i ciasteczko flow id dla challenge. Sesja aplikacji, polityka rejestracji i renderowanie stron dalej są po stronie projektu przez hooki.
