@@ -13,6 +13,7 @@ from my_auth import (
     PasskeyCredential,
     PasskeyService,
     PasskeyUser,
+    SQLiteCredentialStore,
     UserHandleMismatch,
 )
 from my_auth.passkeys import bytes_to_b64url
@@ -176,3 +177,55 @@ def test_memory_store_allows_multiple_passkeys_per_user() -> None:
         b"phone",
         b"laptop",
     }
+
+
+def test_sqlite_credential_store_persists_full_credential_lifecycle(tmp_path) -> None:
+    database = tmp_path / "passkeys.sqlite"
+    store = SQLiteCredentialStore(database)
+    user = PasskeyUser(user_id="u1", user_handle=b"handle", name="mikolaj", display_name="Mikołaj")
+    created_at = datetime(2026, 1, 1, tzinfo=UTC)
+
+    store.save_user(user)
+    store.save_credential(
+        PasskeyCredential(
+            credential_id=b"phone",
+            user_id="u1",
+            public_key=b"pk1",
+            sign_count=3,
+            transports=["internal"],
+            device_type="single_device",
+            backed_up=False,
+            label="Phone",
+            created_at=created_at,
+        )
+    )
+    store.save_credential(
+        PasskeyCredential(
+            credential_id=b"laptop",
+            user_id="u1",
+            public_key=b"pk2",
+            created_at=created_at + timedelta(seconds=1),
+        )
+    )
+    store.close()
+
+    reopened = SQLiteCredentialStore(database)
+
+    assert reopened.get_user("u1") == user
+    assert reopened.get_user_by_handle(b"handle") == user
+    assert [credential.credential_id for credential in reopened.list_credentials_for_user("u1")] == [
+        b"phone",
+        b"laptop",
+    ]
+    updated = reopened.update_credential_after_login(
+        b"phone",
+        sign_count=4,
+        device_type="multi_device",
+        backed_up=True,
+    )
+    assert updated.sign_count == 4
+    assert updated.backed_up is True
+    assert updated.label == "Phone"
+    assert reopened.delete_credential(b"laptop", user_id="other") is False
+    assert reopened.delete_credential(b"laptop", user_id="u1") is True
+    assert reopened.get_credential(b"laptop") is None

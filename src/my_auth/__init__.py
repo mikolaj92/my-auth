@@ -6,10 +6,12 @@ from .passkeys import (
     CredentialStore,
     MemoryChallengeStore,
     MemoryCredentialStore,
+    PASSKEY_SQLITE_SCHEMA,
     PasskeyConfig,
     PasskeyCredential,
     PasskeyService,
     PasskeyUser,
+    SQLiteCredentialStore,
     UserHandleMismatch,
 )
 
@@ -21,9 +23,11 @@ __all__ = [
     "CredentialStore",
     "MemoryChallengeStore",
     "MemoryCredentialStore",
+    "PASSKEY_SQLITE_SCHEMA",
     "PasskeyConfig",
     "PasskeyCredential",
     "PasskeyService",
     "PasskeyUser",
+    "SQLiteCredentialStore",
     "UserHandleMismatch",
 ]

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, Literal, Protocol
 from urllib.parse import urlparse
 
@@ -192,6 +194,38 @@ class CredentialStore(Protocol):
         backed_up: bool | None,
     ) -> PasskeyCredential: ...
 
+    def delete_credential(self, credential_id: bytes, *, user_id: str | None = None) -> bool: ...
+
+
+PASSKEY_SQLITE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS passkey_users (
+  user_id TEXT PRIMARY KEY,
+  user_handle TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  display_name TEXT
+);
+
+CREATE TABLE IF NOT EXISTS passkey_credentials (
+  credential_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES passkey_users(user_id) ON DELETE CASCADE,
+  public_key BLOB NOT NULL,
+  sign_count INTEGER NOT NULL DEFAULT 0,
+  transports TEXT,
+  device_type TEXT,
+  backed_up INTEGER,
+  label TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_credentials_user_id
+  ON passkey_credentials(user_id);
+"""
+
+
+_CREDENTIAL_COLUMNS = (
+    "credential_id, user_id, public_key, sign_count, transports, device_type, backed_up, label, created_at"
+)
+
 
 class MemoryChallengeStore:
     def __init__(self, *, now: Any | None = None) -> None:
@@ -263,6 +297,176 @@ class MemoryCredentialStore:
         credential.device_type = device_type
         credential.backed_up = backed_up
         return credential
+
+    def delete_credential(self, credential_id: bytes, *, user_id: str | None = None) -> bool:
+        credential = self.credentials.get(credential_id)
+        if credential is None or (user_id is not None and credential.user_id != user_id):
+            return False
+        del self.credentials[credential_id]
+        return True
+
+
+class SQLiteCredentialStore:
+    def __init__(
+        self,
+        database: str | Path | sqlite3.Connection,
+        *,
+        create_schema: bool = True,
+    ) -> None:
+        self.connection = database if isinstance(database, sqlite3.Connection) else sqlite3.connect(database)
+        self.connection.execute("PRAGMA foreign_keys = ON")
+        if create_schema:
+            self.create_schema()
+
+    def create_schema(self) -> None:
+        self.connection.executescript(PASSKEY_SQLITE_SCHEMA)
+
+    def close(self) -> None:
+        self.connection.close()
+
+    def save_user(self, user: PasskeyUser) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO passkey_users (user_id, user_handle, name, display_name)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                  user_handle = excluded.user_handle,
+                  name = excluded.name,
+                  display_name = excluded.display_name
+                """,
+                (user.user_id, bytes_to_b64url(user.user_handle), user.name, user.display_name),
+            )
+
+    def get_user(self, user_id: str) -> PasskeyUser | None:
+        row = self.connection.execute(
+            "SELECT user_id, user_handle, name, display_name FROM passkey_users WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        return _sqlite_user(row)
+
+    def get_user_by_handle(self, user_handle: bytes) -> PasskeyUser | None:
+        row = self.connection.execute(
+            "SELECT user_id, user_handle, name, display_name FROM passkey_users WHERE user_handle = ?",
+            (bytes_to_b64url(user_handle),),
+        ).fetchone()
+        return _sqlite_user(row)
+
+    def list_credentials_for_user(self, user_id: str) -> Iterable[PasskeyCredential]:
+        rows = self.connection.execute(
+            f"""
+            SELECT {_CREDENTIAL_COLUMNS}
+            FROM passkey_credentials
+            WHERE user_id = ?
+            ORDER BY created_at, credential_id
+            """,
+            (user_id,),
+        ).fetchall()
+        return [_sqlite_credential(row) for row in rows]
+
+    def get_credential(self, credential_id: bytes) -> PasskeyCredential | None:
+        row = self.connection.execute(
+            f"SELECT {_CREDENTIAL_COLUMNS} FROM passkey_credentials WHERE credential_id = ?",
+            (bytes_to_b64url(credential_id),),
+        ).fetchone()
+        return _sqlite_credential(row) if row else None
+
+    def save_credential(self, credential: PasskeyCredential) -> None:
+        with self.connection:
+            self.connection.execute(
+                f"""
+                INSERT INTO passkey_credentials ({_CREDENTIAL_COLUMNS})
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(credential_id) DO UPDATE SET
+                  user_id = excluded.user_id,
+                  public_key = excluded.public_key,
+                  sign_count = excluded.sign_count,
+                  transports = excluded.transports,
+                  device_type = excluded.device_type,
+                  backed_up = excluded.backed_up,
+                  label = excluded.label,
+                  created_at = excluded.created_at
+                """,
+                _sqlite_credential_values(credential),
+            )
+
+    def update_credential_after_login(
+        self,
+        credential_id: bytes,
+        *,
+        sign_count: int,
+        device_type: str | None,
+        backed_up: bool | None,
+    ) -> PasskeyCredential:
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE passkey_credentials
+                SET sign_count = ?, device_type = ?, backed_up = ?
+                WHERE credential_id = ?
+                """,
+                (sign_count, device_type, _sqlite_bool(backed_up), bytes_to_b64url(credential_id)),
+            )
+        credential = self.get_credential(credential_id)
+        if credential is None:
+            raise CredentialNotFound("unknown passkey credential")
+        return credential
+
+    def delete_credential(self, credential_id: bytes, *, user_id: str | None = None) -> bool:
+        sql = "DELETE FROM passkey_credentials WHERE credential_id = ?"
+        params: tuple[str, ...] = (bytes_to_b64url(credential_id),)
+        if user_id is not None:
+            sql += " AND user_id = ?"
+            params = (*params, user_id)
+        with self.connection:
+            cursor = self.connection.execute(sql, params)
+        return cursor.rowcount > 0
+
+
+def _sqlite_user(row: Any) -> PasskeyUser | None:
+    if row is None:
+        return None
+    return PasskeyUser(
+        user_id=row[0],
+        user_handle=b64url_to_bytes(row[1]),
+        name=row[2],
+        display_name=row[3],
+    )
+
+
+def _sqlite_credential(row: Any) -> PasskeyCredential:
+    transports = json.loads(row[4]) if row[4] else []
+    return PasskeyCredential(
+        credential_id=b64url_to_bytes(row[0]),
+        user_id=row[1],
+        public_key=row[2],
+        sign_count=row[3],
+        transports=[str(transport) for transport in transports],
+        device_type=row[5],
+        backed_up=None if row[6] is None else bool(row[6]),
+        label=row[7],
+        created_at=datetime.fromisoformat(row[8]),
+    )
+
+
+def _sqlite_credential_values(credential: PasskeyCredential) -> tuple[Any, ...]:
+    return (
+        bytes_to_b64url(credential.credential_id),
+        credential.user_id,
+        credential.public_key,
+        credential.sign_count,
+        json.dumps(credential.transports) if credential.transports else None,
+        credential.device_type,
+        _sqlite_bool(credential.backed_up),
+        credential.label,
+        credential.created_at.isoformat(),
+    )
+
+
+def _sqlite_bool(value: bool | None) -> int | None:
+    if value is None:
+        return None
+    return int(value)
 
 
 class PasskeyService:
