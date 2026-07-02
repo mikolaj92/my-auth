@@ -13,6 +13,7 @@ from my_auth import (
     PasskeyCredential,
     PasskeyService,
     PasskeyUser,
+    SQLiteChallengeStore,
     SQLiteCredentialStore,
     UserHandleMismatch,
 )
@@ -58,6 +59,48 @@ def test_challenge_store_expires_records() -> None:
 
     with pytest.raises(ChallengeNotFound):
         store.pop(key="flow", kind="authentication")
+
+
+def test_sqlite_challenge_store_atomically_consumes_across_connections(tmp_path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    database = tmp_path / "challenges.sqlite"
+    writer = SQLiteChallengeStore(database, now=lambda: now)
+    reader = SQLiteChallengeStore(database, now=lambda: now)
+    user = PasskeyUser(user_id="u1", user_handle=b"handle", name="mikolaj")
+
+    writer.save(key="flow", kind="registration", challenge=b"abc", ttl_seconds=300, user=user)
+
+    record = reader.pop(key="flow", kind="registration")
+
+    assert record.challenge == b"abc"
+    assert record.user == user
+    with pytest.raises(ChallengeNotFound):
+        writer.pop(key="flow", kind="registration")
+
+
+def test_sqlite_challenge_store_keeps_kinds_separate(tmp_path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store = SQLiteChallengeStore(tmp_path / "challenges.sqlite", now=lambda: now)
+    store.save(key="flow", kind="authentication", challenge=b"abc", ttl_seconds=300)
+
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="flow", kind="registration")
+
+    assert store.pop(key="flow", kind="authentication").challenge == b"abc"
+
+
+def test_sqlite_challenge_store_rejects_and_cleans_up_expired_records(tmp_path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store = SQLiteChallengeStore(tmp_path / "challenges.sqlite", now=lambda: now)
+    store.save(key="expired", kind="authentication", challenge=b"old", ttl_seconds=1)
+    store.save(key="active", kind="authentication", challenge=b"new", ttl_seconds=300)
+
+    now += timedelta(seconds=2)
+
+    assert store.cleanup_expired() == 1
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="expired", kind="authentication")
+    assert store.pop(key="active", kind="authentication").challenge == b"new"
 
 
 def test_finish_registration_verifies_and_saves_user_and_credential(monkeypatch: pytest.MonkeyPatch) -> None:

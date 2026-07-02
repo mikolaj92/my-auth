@@ -371,6 +371,45 @@ Kolumny i konwersje są takie same jak w schemacie SQLite; `transports` to JSON
 array albo `NULL`, `backed_up` to nullable boolean/integer, a `created_at` to
 ISO datetime.
 
+## Challenge storage
+
+`MemoryChallengeStore` jest dobry do testów, lokalnego developmentu i jednego
+procesu. Przy wielu workerach albo wielu instancjach aplikacji użyj wspólnego
+store, np. SQLite:
+
+```python
+from my_auth import SQLiteChallengeStore
+
+challenges = SQLiteChallengeStore("app.sqlite3")
+```
+
+`SQLiteChallengeStore.pop(...)` robi atomowe `DELETE ... RETURNING`, więc
+challenge jest jednorazowy również wtedy, gdy drugi worker próbuje użyć tego
+samego flow. Wygasłe rekordy są odrzucane i można je sprzątać okresowo:
+
+```python
+deleted_count = challenges.cleanup_expired()
+```
+
+Standardowy schemat challenge store:
+
+```sql
+CREATE TABLE passkey_challenges (
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  challenge BLOB NOT NULL,
+  expires_at TEXT NOT NULL,
+  user_id TEXT,
+  user_handle TEXT,
+  user_name TEXT,
+  user_display_name TEXT,
+  PRIMARY KEY (key, kind)
+);
+
+CREATE INDEX idx_passkey_challenges_expires_at
+  ON passkey_challenges(expires_at);
+```
+
 ## Passkey-only zasady
 
 - Login bez username/password wymaga discoverable credentials / resident keys.
