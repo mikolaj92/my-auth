@@ -83,6 +83,48 @@ Domyślne trasy:
 - `POST /api/auth/register/options`
 - `POST /api/auth/register/verify`
 
+Najkrótsza ścieżka dla nowej aplikacji to factory składający config,
+`PasskeyService` i router:
+
+```python
+from my_auth import SQLiteChallengeStore, SQLiteCredentialStore
+from my_auth.fastapi import (
+    PasskeyFastAPIHooks,
+    PasskeyFastAPISettings,
+    build_passkey_fastapi_plugin,
+)
+
+settings = PasskeyFastAPISettings.from_env()
+app.include_router(
+    build_passkey_fastapi_plugin(
+        settings=settings,
+        credentials=SQLiteCredentialStore("app.sqlite3"),
+        challenges=SQLiteChallengeStore("app.sqlite3"),
+        hooks=PasskeyFastAPIHooks(
+            get_session_user=get_session_user,
+            make_registration_user=make_registration_user,
+            get_auth_user=get_auth_user,
+            login=login,
+            logout=logout,
+            registration_allowed=registration_allowed,
+            render_login=render_login,
+            render_register=render_register,
+        ),
+    )
+)
+```
+
+`PasskeyFastAPISettings.from_env()` czyta `PASSKEY_RP_ID`,
+`PASSKEY_RP_NAME`, `PASSKEY_ORIGIN` oraz opcjonalnie m.in.
+`PASSKEY_CHALLENGE_TTL_SECONDS`, `PASSKEY_COOKIE_SECURE`,
+`PASSKEY_LOGIN_PAGE` i `PASSKEY_CHALLENGE_COOKIE`. Dla aplikacji z własnym
+prefixem użyj np. `PasskeyFastAPISettings.from_env(prefix="CONTROL_PLANE_")`.
+
+Bootstrap rejestracji i dodawanie kolejnej passkey pozostają w hookach:
+`registration_allowed` decyduje, czy flow jest dozwolony, a
+`get_session_user` sprawia, że zalogowany użytkownik rejestruje dodatkową
+passkey zamiast tworzyć nowe konto.
+
 ```python
 from fastapi import FastAPI, Request, Response
 from starlette.responses import HTMLResponse

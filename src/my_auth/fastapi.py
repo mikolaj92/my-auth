@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 import inspect
+import os
 import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from starlette.responses import JSONResponse, RedirectResponse
 from webauthn.helpers.exceptions import WebAuthnException
 
-from .passkeys import ChallengeNotFound, CredentialNotFound, PasskeyCredential, PasskeyUser, UserHandleMismatch
+from .passkeys import (
+    ChallengeNotFound,
+    ChallengeStore,
+    CredentialNotFound,
+    CredentialStore,
+    PasskeyConfig,
+    PasskeyCredential,
+    PasskeyService,
+    PasskeyUser,
+    UserHandleMismatch,
+)
 
 AuthUser = PasskeyUser
 
@@ -59,6 +70,87 @@ class PasskeyRouteHooks:
     after_login: Callable[[Request, AuthUser, PasskeyCredential], MaybeAwaitable[None]] = field(
         default=lambda _request, _user, _credential: None
     )
+
+
+PasskeyFastAPIHooks = PasskeyRouteHooks
+
+
+@dataclass(frozen=True)
+class PasskeyFastAPISettings:
+    rp_id: str
+    rp_name: str
+    origin: str
+    timeout_ms: int = 60_000
+    challenge_ttl_seconds: int = 300
+    user_verification: Literal["required", "preferred", "discouraged"] = "required"
+    paths: PasskeyPaths = PasskeyPaths()
+    cookies: PasskeyCookies = PasskeyCookies()
+
+    @classmethod
+    def from_env(
+        cls,
+        environ: Mapping[str, str] | None = None,
+        *,
+        prefix: str = "PASSKEY_",
+    ) -> "PasskeyFastAPISettings":
+        env = os.environ if environ is None else environ
+        settings = cls(
+            rp_id=_required_env(env, prefix, "RP_ID"),
+            rp_name=_required_env(env, prefix, "RP_NAME"),
+            origin=_required_env(env, prefix, "ORIGIN"),
+            timeout_ms=_int_env(env, prefix, "TIMEOUT_MS", 60_000),
+            challenge_ttl_seconds=_int_env(env, prefix, "CHALLENGE_TTL_SECONDS", 300),
+            user_verification=_env(env, prefix, "USER_VERIFICATION", "required"),  # type: ignore[arg-type]
+            paths=PasskeyPaths(
+                login_page=_env(env, prefix, "LOGIN_PAGE", PasskeyPaths.login_page),
+                register_page=_env(env, prefix, "REGISTER_PAGE", PasskeyPaths.register_page),
+                logout=_env(env, prefix, "LOGOUT_PATH", PasskeyPaths.logout),
+                login_options=_env(env, prefix, "LOGIN_OPTIONS_PATH", PasskeyPaths.login_options),
+                login_verify=_env(env, prefix, "LOGIN_VERIFY_PATH", PasskeyPaths.login_verify),
+                register_options=_env(env, prefix, "REGISTER_OPTIONS_PATH", PasskeyPaths.register_options),
+                register_verify=_env(env, prefix, "REGISTER_VERIFY_PATH", PasskeyPaths.register_verify),
+            ),
+            cookies=PasskeyCookies(
+                challenge=_env(env, prefix, "CHALLENGE_COOKIE", _env(env, prefix, "COOKIE_NAME", PasskeyCookies.challenge)),
+                register_name=_env(env, prefix, "REGISTER_NAME_COOKIE", PasskeyCookies.register_name),
+                path=_env(env, prefix, "COOKIE_PATH", PasskeyCookies.path),
+                secure=_bool_env(env, prefix, "COOKIE_SECURE", True),
+                httponly=_bool_env(env, prefix, "COOKIE_HTTPONLY", True),
+                samesite=_env(env, prefix, "COOKIE_SAMESITE", PasskeyCookies.samesite),
+            ),
+        )
+        settings.passkey_config()
+        return settings
+
+    def passkey_config(self) -> PasskeyConfig:
+        return PasskeyConfig(
+            rp_id=self.rp_id,
+            rp_name=self.rp_name,
+            origin=self.origin,
+            timeout_ms=self.timeout_ms,
+            challenge_ttl_seconds=self.challenge_ttl_seconds,
+            user_verification=self.user_verification,
+        )
+
+
+def build_passkey_fastapi_plugin(
+    *,
+    settings: PasskeyFastAPISettings,
+    credentials: CredentialStore,
+    challenges: ChallengeStore,
+    hooks: PasskeyFastAPIHooks,
+) -> APIRouter:
+    service = PasskeyService(
+        config=settings.passkey_config(),
+        challenges=challenges,
+        credentials=credentials,
+    )
+    return PasskeyAuthRouter(
+        service=service,
+        hooks=hooks,
+        paths=settings.paths,
+        cookies=settings.cookies,
+    ).router
 
 
 class PasskeyAuthRouter:
@@ -227,12 +319,51 @@ def _without_legacy_user_handle(credential: dict[str, Any]) -> dict[str, Any]:
     return copied
 
 
+def _env(env: Mapping[str, str], prefix: str, name: str, default: Any) -> Any:
+    value = env.get(f"{prefix}{name}")
+    if value is None or value == "":
+        return default
+    return value
+
+
+def _required_env(env: Mapping[str, str], prefix: str, name: str) -> str:
+    value = _env(env, prefix, name, None)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{prefix}{name} is required")
+    return value.strip()
+
+
+def _int_env(env: Mapping[str, str], prefix: str, name: str, default: int) -> int:
+    value = _env(env, prefix, name, None)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ValueError(f"{prefix}{name} must be an integer") from error
+
+
+def _bool_env(env: Mapping[str, str], prefix: str, name: str, default: bool) -> bool:
+    value = _env(env, prefix, name, None)
+    if value is None:
+        return default
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{prefix}{name} must be a boolean")
+
+
 AUTH_ERRORS = (ChallengeNotFound, CredentialNotFound, UserHandleMismatch, ValueError, WebAuthnException)
 
 __all__ = [
     "AuthUser",
+    "PasskeyFastAPIHooks",
+    "PasskeyFastAPISettings",
     "PasskeyAuthRouter",
     "PasskeyCookies",
     "PasskeyPaths",
     "PasskeyRouteHooks",
+    "build_passkey_fastapi_plugin",
 ]
