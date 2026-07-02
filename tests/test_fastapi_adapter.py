@@ -6,13 +6,27 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.responses import PlainTextResponse
 from webauthn.helpers.exceptions import InvalidAuthenticationResponse, InvalidRegistrationResponse
 
-from my_auth import ChallengeNotFound, PasskeyCredential, PasskeyUser
-from my_auth.fastapi import AuthUser, PasskeyAuthRouter, PasskeyRouteHooks
+from my_auth import (
+    ChallengeNotFound,
+    PasskeyConfig,
+    PasskeyCredential,
+    PasskeyUser,
+    SQLiteChallengeStore,
+    SQLiteCredentialStore,
+)
+from my_auth.fastapi import (
+    AuthUser,
+    PasskeyAuthRouter,
+    PasskeyFastAPISettings,
+    PasskeyRouteHooks,
+    build_passkey_fastapi_plugin,
+)
 
 
 class FakePasskeyService:
@@ -140,6 +154,98 @@ def hooks_for(recorder: HookRecorder) -> PasskeyRouteHooks:
         after_register=recorder.after_register,
         after_login=recorder.after_login,
     )
+
+
+def test_fastapi_settings_from_env_supports_paths_cookies_and_custom_prefix() -> None:
+    settings = PasskeyFastAPISettings.from_env(
+        {
+            "PASSKEY_RP_ID": "localhost",
+            "PASSKEY_RP_NAME": "Demo",
+            "PASSKEY_ORIGIN": "http://localhost:8000",
+            "PASSKEY_TIMEOUT_MS": "1234",
+            "PASSKEY_CHALLENGE_TTL_SECONDS": "45",
+            "PASSKEY_USER_VERIFICATION": "preferred",
+            "PASSKEY_LOGIN_PAGE": "/signin",
+            "PASSKEY_CHALLENGE_COOKIE": "flow",
+            "PASSKEY_COOKIE_SECURE": "false",
+            "PASSKEY_COOKIE_SAMESITE": "strict",
+        }
+    )
+
+    assert settings.passkey_config() == PasskeyConfig(
+        rp_id="localhost",
+        rp_name="Demo",
+        origin="http://localhost:8000",
+        timeout_ms=1234,
+        challenge_ttl_seconds=45,
+        user_verification="preferred",
+    )
+    assert settings.paths.login_page == "/signin"
+    assert settings.cookies.challenge == "flow"
+    assert settings.cookies.secure is False
+    assert settings.cookies.samesite == "strict"
+    assert PasskeyFastAPISettings.from_env(
+        {
+            "CONTROL_PLANE_RP_ID": "localhost",
+            "CONTROL_PLANE_RP_NAME": "Control Plane",
+            "CONTROL_PLANE_ORIGIN": "http://localhost:8000",
+        },
+        prefix="CONTROL_PLANE_",
+    ).rp_name == "Control Plane"
+
+
+def test_fastapi_settings_from_env_rejects_missing_or_invalid_values() -> None:
+    with pytest.raises(ValueError, match="PASSKEY_RP_ID"):
+        PasskeyFastAPISettings.from_env({})
+    with pytest.raises(ValueError, match="PASSKEY_COOKIE_SECURE"):
+        PasskeyFastAPISettings.from_env(
+            {
+                "PASSKEY_RP_ID": "localhost",
+                "PASSKEY_RP_NAME": "Demo",
+                "PASSKEY_ORIGIN": "http://localhost:8000",
+                "PASSKEY_COOKIE_SECURE": "maybe",
+            }
+        )
+
+
+def test_build_passkey_fastapi_plugin_wires_service_settings_and_shared_stores(tmp_path) -> None:
+    settings = PasskeyFastAPISettings.from_env(
+        {
+            "PASSKEY_RP_ID": "localhost",
+            "PASSKEY_RP_NAME": "Demo",
+            "PASSKEY_ORIGIN": "http://localhost:8000",
+            "PASSKEY_CHALLENGE_TTL_SECONDS": "45",
+            "PASSKEY_LOGIN_PAGE": "/signin",
+            "PASSKEY_CHALLENGE_COOKIE": "flow",
+            "PASSKEY_COOKIE_SECURE": "false",
+        }
+    )
+    database = tmp_path / "passkeys.sqlite"
+    challenges = SQLiteChallengeStore(database)
+    credentials = SQLiteCredentialStore(database)
+    recorder = HookRecorder()
+    app = FastAPI()
+    app.include_router(
+        build_passkey_fastapi_plugin(
+            settings=settings,
+            credentials=credentials,
+            challenges=challenges,
+            hooks=hooks_for(recorder),
+        )
+    )
+    client = TestClient(app)
+
+    login = client.get("/signin")
+    options = client.post("/api/auth/login/options")
+
+    assert login.text == "login"
+    assert options.status_code == 200
+    assert options.json()["rpId"] == "localhost"
+    assert options.cookies["flow"]
+    assert "Max-Age=45" in options.headers["set-cookie"]
+    assert "Secure" not in options.headers["set-cookie"]
+    record = challenges.pop(key=options.cookies["flow"], kind="authentication")
+    assert record.kind == "authentication"
 
 
 def app_client(
@@ -357,8 +463,11 @@ def test_adapter_exports_only_router_hooks_and_path_cookie_config() -> None:
 
     assert set(fastapi_adapter.__all__) == {
         "AuthUser",
+        "PasskeyFastAPIHooks",
+        "PasskeyFastAPISettings",
         "PasskeyAuthRouter",
         "PasskeyCookies",
         "PasskeyPaths",
         "PasskeyRouteHooks",
+        "build_passkey_fastapi_plugin",
     }

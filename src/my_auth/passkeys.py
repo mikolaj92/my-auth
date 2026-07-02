@@ -307,7 +307,9 @@ class SQLiteChallengeStore:
         create_schema: bool = True,
         now: Any | None = None,
     ) -> None:
-        self.connection = database if isinstance(database, sqlite3.Connection) else sqlite3.connect(database)
+        self.connection = (
+            database if isinstance(database, sqlite3.Connection) else sqlite3.connect(database, check_same_thread=False)
+        )
         self._now = now or (lambda: datetime.now(UTC))
         if create_schema:
             self.create_schema()
@@ -432,7 +434,9 @@ class SQLiteCredentialStore:
         *,
         create_schema: bool = True,
     ) -> None:
-        self.connection = database if isinstance(database, sqlite3.Connection) else sqlite3.connect(database)
+        self.connection = (
+            database if isinstance(database, sqlite3.Connection) else sqlite3.connect(database, check_same_thread=False)
+        )
         self.connection.execute("PRAGMA foreign_keys = ON")
         if create_schema:
             self.create_schema()
