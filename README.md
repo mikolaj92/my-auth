@@ -318,6 +318,27 @@ async def login_verify(request):
 
 Produkcja powinna trzymać użytkowników i credentiale w bazie aplikacji. Ważne: jeden użytkownik może mieć wiele passkey, więc `user_handle` jest unikalny dla użytkownika, **nie** dla credentiala.
 
+Najprostszy wspólny adapter to `SQLiteCredentialStore`:
+
+```python
+from my_auth import SQLiteCredentialStore
+
+credentials = SQLiteCredentialStore("app.sqlite3")
+passkeys = PasskeyService(
+    config=config,
+    challenges=MemoryChallengeStore(),
+    credentials=credentials,
+)
+```
+
+Adapter tworzy standardowy schemat idempotentnie, zapisuje `credential_id` i
+`user_handle` jako base64url, wspiera wiele credentiali per user, aktualizuje
+sign-count po loginie, listuje credentiale usera i pozwala usunąć credential:
+
+```python
+credentials.delete_credential(credential_id, user_id=current_user_id)
+```
+
 ```sql
 CREATE TABLE passkey_users (
   user_id TEXT PRIMARY KEY,
@@ -340,6 +361,15 @@ CREATE TABLE passkey_credentials (
 ```
 
 Kod powinien mapować `credential_id`, `public_key` i `user_handle` jako bytes w Pythonie, a w JSON/SQL jako base64url string.
+
+Jeśli host używa SQLAlchemy, nie dokładaj drugiej bazy ani zależności do
+`my-auth`: odwzoruj powyższe tabele jako modele aplikacji i zaimplementuj
+metody protokołu `CredentialStore` (`save_user`, `get_user`,
+`get_user_by_handle`, `list_credentials_for_user`, `get_credential`,
+`save_credential`, `update_credential_after_login`, `delete_credential`).
+Kolumny i konwersje są takie same jak w schemacie SQLite; `transports` to JSON
+array albo `NULL`, `backed_up` to nullable boolean/integer, a `created_at` to
+ISO datetime.
 
 ## Passkey-only zasady
 
