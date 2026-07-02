@@ -197,6 +197,20 @@ class CredentialStore(Protocol):
     def delete_credential(self, credential_id: bytes, *, user_id: str | None = None) -> bool: ...
 
 
+class ChallengeStore(Protocol):
+    def save(
+        self,
+        *,
+        key: str,
+        kind: ChallengeKind,
+        challenge: bytes,
+        ttl_seconds: int,
+        user: PasskeyUser | None = None,
+    ) -> ChallengeRecord: ...
+
+    def pop(self, *, key: str, kind: ChallengeKind) -> ChallengeRecord: ...
+
+
 PASSKEY_SQLITE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS passkey_users (
   user_id TEXT PRIMARY KEY,
@@ -222,9 +236,29 @@ CREATE INDEX IF NOT EXISTS idx_passkey_credentials_user_id
 """
 
 
+PASSKEY_SQLITE_CHALLENGE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS passkey_challenges (
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  challenge BLOB NOT NULL,
+  expires_at TEXT NOT NULL,
+  user_id TEXT,
+  user_handle TEXT,
+  user_name TEXT,
+  user_display_name TEXT,
+  PRIMARY KEY (key, kind)
+);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_challenges_expires_at
+  ON passkey_challenges(expires_at);
+"""
+
+
 _CREDENTIAL_COLUMNS = (
     "credential_id, user_id, public_key, sign_count, transports, device_type, backed_up, label, created_at"
 )
+
+_CHALLENGE_COLUMNS = "challenge, kind, key, expires_at, user_id, user_handle, user_name, user_display_name"
 
 
 class MemoryChallengeStore:
@@ -256,6 +290,91 @@ class MemoryChallengeStore:
         if record is None or record.expires_at <= self._now():
             raise ChallengeNotFound(f"missing or expired {kind} challenge")
         return record
+
+    def cleanup_expired(self) -> int:
+        now = self._now()
+        expired = [key for key, record in self._records.items() if record.expires_at <= now]
+        for key in expired:
+            del self._records[key]
+        return len(expired)
+
+
+class SQLiteChallengeStore:
+    def __init__(
+        self,
+        database: str | Path | sqlite3.Connection,
+        *,
+        create_schema: bool = True,
+        now: Any | None = None,
+    ) -> None:
+        self.connection = database if isinstance(database, sqlite3.Connection) else sqlite3.connect(database)
+        self._now = now or (lambda: datetime.now(UTC))
+        if create_schema:
+            self.create_schema()
+
+    def create_schema(self) -> None:
+        self.connection.executescript(PASSKEY_SQLITE_CHALLENGE_SCHEMA)
+
+    def close(self) -> None:
+        self.connection.close()
+
+    def save(
+        self,
+        *,
+        key: str,
+        kind: ChallengeKind,
+        challenge: bytes,
+        ttl_seconds: int,
+        user: PasskeyUser | None = None,
+    ) -> ChallengeRecord:
+        record = ChallengeRecord(
+            challenge=challenge,
+            kind=kind,
+            key=key,
+            expires_at=_utc(self._now() + timedelta(seconds=ttl_seconds)),
+            user=user,
+        )
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO passkey_challenges (
+                  key, kind, challenge, expires_at, user_id, user_handle, user_name, user_display_name
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(key, kind) DO UPDATE SET
+                  challenge = excluded.challenge,
+                  expires_at = excluded.expires_at,
+                  user_id = excluded.user_id,
+                  user_handle = excluded.user_handle,
+                  user_name = excluded.user_name,
+                  user_display_name = excluded.user_display_name
+                """,
+                _sqlite_challenge_values(record),
+            )
+        return record
+
+    def pop(self, *, key: str, kind: ChallengeKind) -> ChallengeRecord:
+        with self.connection:
+            row = self.connection.execute(
+                f"""
+                DELETE FROM passkey_challenges
+                WHERE key = ? AND kind = ? AND expires_at > ?
+                RETURNING {_CHALLENGE_COLUMNS}
+                """,
+                (key, kind, _sqlite_datetime(self._now())),
+            ).fetchone()
+        if row is None:
+            self.cleanup_expired()
+            raise ChallengeNotFound(f"missing or expired {kind} challenge")
+        return _sqlite_challenge(row)
+
+    def cleanup_expired(self) -> int:
+        with self.connection:
+            cursor = self.connection.execute(
+                "DELETE FROM passkey_challenges WHERE expires_at <= ?",
+                (_sqlite_datetime(self._now()),),
+            )
+        return cursor.rowcount
 
 
 class MemoryCredentialStore:
@@ -469,12 +588,54 @@ def _sqlite_bool(value: bool | None) -> int | None:
     return int(value)
 
 
+def _sqlite_challenge(row: Any) -> ChallengeRecord:
+    user = None
+    if row[4] is not None:
+        user = PasskeyUser(
+            user_id=row[4],
+            user_handle=b64url_to_bytes(row[5]),
+            name=row[6],
+            display_name=row[7],
+        )
+    return ChallengeRecord(
+        challenge=row[0],
+        kind=row[1],
+        key=row[2],
+        expires_at=datetime.fromisoformat(row[3]),
+        user=user,
+    )
+
+
+def _sqlite_challenge_values(record: ChallengeRecord) -> tuple[Any, ...]:
+    user = record.user
+    return (
+        record.key,
+        record.kind,
+        record.challenge,
+        _sqlite_datetime(record.expires_at),
+        user.user_id if user else None,
+        bytes_to_b64url(user.user_handle) if user else None,
+        user.name if user else None,
+        user.display_name if user else None,
+    )
+
+
+def _sqlite_datetime(value: datetime) -> str:
+    return _utc(value).isoformat()
+
+
+def _utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 class PasskeyService:
     def __init__(
         self,
         *,
         config: PasskeyConfig,
-        challenges: MemoryChallengeStore,
+        challenges: ChallengeStore,
         credentials: CredentialStore,
     ) -> None:
         self.config = config
