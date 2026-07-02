@@ -1,3 +1,4 @@
+from .challenges import SQLiteChallengeStore
 from .passkeys import (
     AuthenticationResult,
     ChallengeNotFound,
@@ -25,5 +26,6 @@ __all__ = [
     "PasskeyCredential",
     "PasskeyService",
     "PasskeyUser",
+    "SQLiteChallengeStore",
     "UserHandleMismatch",
 ]
