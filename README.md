@@ -185,28 +185,68 @@ async def login_verify(request):
 
 Produkcja powinna trzymać użytkowników i credentiale w bazie aplikacji. Ważne: jeden użytkownik może mieć wiele passkey, więc `user_handle` jest unikalny dla użytkownika, **nie** dla credentiala.
 
+Pakiet zawiera gotowe adaptery — nie trzeba pisać własnego `CredentialStore`:
+
+### SQLite (stdlib, zero dodatkowych zależności)
+
+```python
+import sqlite3
+
+from my_auth import SQLiteCredentialStore
+
+connection = sqlite3.connect("app.db")
+store = SQLiteCredentialStore(connection)
+store.create_tables()  # idempotentne CREATE TABLE IF NOT EXISTS
+
+passkeys = PasskeyService(config=config, challenges=challenges, credentials=store)
+```
+
+### SQLAlchemy (extra `my-auth[sqlalchemy]`)
+
+```python
+from sqlalchemy import create_engine
+
+from my_auth.sqlalchemy_store import SQLAlchemyCredentialStore
+
+engine = create_engine("postgresql+psycopg://...")
+store = SQLAlchemyCredentialStore(engine)
+store.create_tables()  # albo zarządzaj schematem własnymi migracjami
+
+passkeys = PasskeyService(config=config, challenges=challenges, credentials=store)
+```
+
+Możesz podać własne `MetaData` (`SQLAlchemyCredentialStore(engine, metadata=my_metadata)`), żeby tabele weszły do istniejących migracji (np. Alembic autogenerate).
+
+### Standardowy schemat
+
+Snippet migracyjny jest też dostępny w kodzie jako `my_auth.SQLITE_SCHEMA`:
+
 ```sql
 CREATE TABLE passkey_users (
   user_id TEXT PRIMARY KEY,
-  user_handle TEXT NOT NULL UNIQUE,
+  user_handle BLOB NOT NULL UNIQUE,
   name TEXT NOT NULL,
   display_name TEXT
 );
 
 CREATE TABLE passkey_credentials (
-  credential_id TEXT PRIMARY KEY,
+  credential_id BLOB PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES passkey_users(user_id),
   public_key BLOB NOT NULL,
   sign_count INTEGER NOT NULL DEFAULT 0,
-  transports TEXT,
+  transports TEXT NOT NULL DEFAULT '[]',  -- JSON array
   device_type TEXT,
   backed_up INTEGER,
   label TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL  -- ISO 8601
 );
+
+CREATE INDEX ix_passkey_credentials_user_id ON passkey_credentials (user_id);
 ```
 
-Kod powinien mapować `credential_id`, `public_key` i `user_handle` jako bytes w Pythonie, a w JSON/SQL jako base64url string.
+`credential_id`, `public_key` i `user_handle` są w bazie jako BLOB/bytes; w JSON mapuj je jako base64url string (`bytes_to_b64url` / `b64url_to_bytes`). Helpery konwersji wierszy (`transports_to_json`, `credential_to_row`, `credential_from_row`, itd.) są w `my_auth.stores` — przydatne przy migracji istniejącego, własnego store'a.
+
+Aplikacje z własnym schematem mogą migrować stopniowo: kontrakt `CredentialStore` i publiczne API `PasskeyService` się nie zmieniają.
 
 ## Passkey-only zasady
 

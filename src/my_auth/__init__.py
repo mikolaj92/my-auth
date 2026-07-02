@@ -12,8 +12,11 @@ from .passkeys import (
     PasskeyUser,
     UserHandleMismatch,
 )
+from .stores import SQLITE_SCHEMA, SQLiteCredentialStore
 
 __all__ = [
+    "SQLITE_SCHEMA",
+    "SQLiteCredentialStore",
     "AuthenticationResult",
     "ChallengeNotFound",
     "ChallengeRecord",

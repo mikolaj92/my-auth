@@ -16,12 +16,14 @@ dependencies = [
 
 [project.optional-dependencies]
 fastapi = ["fastapi>=0.115"]
+sqlalchemy = ["sqlalchemy>=2"]
 
 [dependency-groups]
 dev = [
   "fastapi>=0.115",
   "httpx>=0.27",
   "pytest>=8",
+  "sqlalchemy>=2",
 ]
 
 [tool.pytest.ini_options]
