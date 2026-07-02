@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -101,6 +102,54 @@ def test_sqlite_challenge_store_rejects_and_cleans_up_expired_records(tmp_path) 
     with pytest.raises(ChallengeNotFound):
         store.pop(key="expired", kind="authentication")
     assert store.pop(key="active", kind="authentication").challenge == b"new"
+
+
+def test_sqlite_challenge_store_persists_registration_records_across_instances(tmp_path: Path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    db_path = tmp_path / "passkey-challenges.sqlite3"
+    user = PasskeyUser(user_id="u1", user_handle=b"stable-user-handle", name="mikolaj", display_name="Mikołaj")
+
+    SQLiteChallengeStore(db_path, now=lambda: now).save(
+        key="register-1",
+        kind="registration",
+        challenge=b"challenge-bytes",
+        ttl_seconds=300,
+        user=user,
+    )
+    store = SQLiteChallengeStore(db_path, now=lambda: now)
+
+    record = store.pop(key="register-1", kind="registration")
+
+    assert record.challenge == b"challenge-bytes"
+    assert record.user == user
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="register-1", kind="registration")
+
+
+def test_sqlite_challenge_store_keeps_registration_and_authentication_challenges_isolated(tmp_path: Path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store = SQLiteChallengeStore(tmp_path / "passkey-challenges.sqlite3", now=lambda: now)
+    store.save(key="flow", kind="registration", challenge=b"registration", ttl_seconds=300)
+
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="flow", kind="authentication")
+
+    record = store.pop(key="flow", kind="registration")
+    assert record.challenge == b"registration"
+
+
+def test_sqlite_challenge_store_deletes_expired_records_on_cleanup(tmp_path: Path) -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store = SQLiteChallengeStore(tmp_path / "passkey-challenges.sqlite3", now=lambda: now)
+    store.save(key="expired", kind="authentication", challenge=b"old", ttl_seconds=1)
+    store.save(key="active", kind="authentication", challenge=b"fresh", ttl_seconds=10)
+
+    now += timedelta(seconds=2)
+
+    assert store.cleanup_expired() == 1
+    with pytest.raises(ChallengeNotFound):
+        store.pop(key="expired", kind="authentication")
+    assert store.pop(key="active", kind="authentication").challenge == b"fresh"
 
 
 def test_finish_registration_verifies_and_saves_user_and_credential(monkeypatch: pytest.MonkeyPatch) -> None:
