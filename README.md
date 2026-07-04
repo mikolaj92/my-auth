@@ -358,6 +358,32 @@ async def login_verify(request):
 
 ## Storage
 
+Do testów własnych implementacji store importuj współdzielone kontrakty zamiast
+kopiować przypadki między aplikacjami:
+
+```python
+from my_auth.testing import assert_challenge_store_contract, assert_credential_store_contract
+
+
+def test_my_passkey_stores() -> None:
+    assert_credential_store_contract(lambda: MyCredentialStore(...))
+    assert_challenge_store_contract(lambda now: MyChallengeStore(..., now=now))
+```
+
+Kontrakty sprawdzają zapis/odczyt użytkownika, lookup po `user_handle`, zapis,
+odczyt i listowanie credentiali, aktualizację sign-count po loginie,
+jednorazowe `pop()` challenge oraz wygasanie TTL.
+
+Hosty SQLite mogą użyć kanonicznego schematu z pakietu, bez ręcznego kopiowania
+DDL:
+
+```python
+from my_auth.sqlite_schema import ensure_sqlite_schema, sqlite_schema_sql
+
+ensure_sqlite_schema(connection)  # idempotentnie tworzy tabele, indeksy i FK
+ddl_for_migrations = sqlite_schema_sql()
+```
+
 Produkcja powinna trzymać użytkowników i credentiale w bazie aplikacji. Ważne: jeden użytkownik może mieć wiele passkey, więc `user_handle` jest unikalny dla użytkownika, **nie** dla credentiala.
 
 Najprostszy wspólny adapter to `SQLiteCredentialStore`:
