@@ -17,6 +17,8 @@ from .passkeys import (
     SQLiteCredentialStore,
     UserHandleMismatch,
 )
+from .sqlite_schema import ensure_sqlite_schema, sqlite_schema_sql
+from .testing import assert_challenge_store_contract, assert_credential_store_contract
 
 __all__ = [
     "AuthenticationResult",
@@ -36,4 +38,8 @@ __all__ = [
     "SQLiteChallengeStore",
     "SQLiteCredentialStore",
     "UserHandleMismatch",
+    "assert_challenge_store_contract",
+    "assert_credential_store_contract",
+    "ensure_sqlite_schema",
+    "sqlite_schema_sql",
 ]
