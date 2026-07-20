@@ -442,6 +442,13 @@ def test_static_js_can_send_registration_display_name() -> None:
     assert "postJSON(optionsUrl, registrationOptionsBody, fetchOptions)" in register_js
     assert "postJSON(optionsUrl, {}, fetchOptions)" not in register_js
 
+def test_static_js_accepts_prefetched_options_for_web_authn_activation() -> None:
+    js = Path("src/my_auth/static/passkey.js").read_text()
+
+    assert "options," in js.split("export async function registerPasskey", 1)[1]
+    assert "const registrationOptions = options ?? await postJSON(" in js
+    assert "const loginOptions = options ?? await postJSON(" in js
+
 
 def test_core_import_does_not_import_fastapi_adapter() -> None:
     result = subprocess.run(
