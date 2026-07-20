@@ -78,24 +78,26 @@ export async function registerPasskey({
   displayName,
   display_name,
   optionsBody = {},
+  options,
   fetchOptions = {},
 } = {}) {
   const registrationOptionsBody = { ...optionsBody };
   const registrationDisplayName = display_name ?? displayName;
   if (registrationDisplayName !== undefined) registrationOptionsBody.display_name = registrationDisplayName;
 
-  const options = await postJSON(optionsUrl, registrationOptionsBody, fetchOptions);
-  const credential = await navigator.credentials.create({ publicKey: parseCreationOptions(options) });
+  const registrationOptions = options ?? await postJSON(optionsUrl, registrationOptionsBody, fetchOptions);
+  const credential = await navigator.credentials.create({ publicKey: parseCreationOptions(registrationOptions) });
   return postJSON(verifyUrl, serializeCredential(credential), fetchOptions);
 }
 
 export async function loginPasskey({
   optionsUrl = "/api/auth/login/options",
   verifyUrl = "/api/auth/login/verify",
+  options,
   fetchOptions = {},
 } = {}) {
-  const options = await postJSON(optionsUrl, {}, fetchOptions);
-  const credential = await navigator.credentials.get({ publicKey: parseRequestOptions(options) });
+  const loginOptions = options ?? await postJSON(optionsUrl, {}, fetchOptions);
+  const credential = await navigator.credentials.get({ publicKey: parseRequestOptions(loginOptions) });
   return postJSON(verifyUrl, serializeCredential(credential), fetchOptions);
 }
 
