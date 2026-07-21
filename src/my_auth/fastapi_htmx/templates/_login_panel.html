@@ -1,12 +1,12 @@
-<section class="card passkey-card" aria-labelledby="passkey-page-title">
-  <div class="card-header passkey-card__header">
+<div class="card passkey-card" aria-labelledby="passkey-page-title">
+  <header class="passkey-card__header">
     <p class="badge passkey-eyebrow">Passkey sign in</p>
     <h1 id="passkey-page-title" class="card-title">Sign in without a password</h1>
     <p class="card-description">
       Use your device passkey prompt to continue. This page keeps WebAuthn API responses as JSON.
     </p>
-  </div>
-  <div class="card-content passkey-card__content">
+  </header>
+  <section class="passkey-card__content">
     <form
       id="passkey-login-form"
       class="passkey-form"
@@ -32,5 +32,5 @@
         WebAuthn passkeys require JavaScript and a browser with PublicKeyCredential support.
       </p>
     </noscript>
-  </div>
-</section>
+  </section>
+</div>
