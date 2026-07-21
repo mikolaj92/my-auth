@@ -211,9 +211,18 @@ produkcyjnych sesji aplikacji ani app cookies.
 ## FastAPI/Jinja/HTMX UI adapter
 
 Extra `fastapi-htmx` dodaje opt-in adapter `my_auth.fastapi_htmx` dla
-serwerowo renderowanych stron passkey. Root import pozostaje lekki:
-`import my_auth` nie importuje FastAPI, Starlette, Jinja ani zasobów UI.
-Importuj adapter jawnie tylko w hostach, które zainstalowały extra:
+serwerowo renderowanych stron passkey. UI ładuje **ten sam chrome co apki**
+przez [app-factory](https://github.com/mikolaj92/app-factory) /
+[basecoat-factory](https://github.com/mikolaj92/basecoat-factory) (`btn`, `card`,
+theme, HTMX/Alpine). `passkey-ui.css` to tylko layout ceremonii (centrowanie).
+
+Root import pozostaje lekki: `import my_auth` nie importuje FastAPI, Starlette,
+Jinja ani zasobów UI. Importuj adapter jawnie tylko w hostach z extra:
+
+```bash
+uv add "my-auth[fastapi-htmx]"
+# lub lokalnie: uv add --editable ../app-factory
+```
 
 ```python
 from fastapi import FastAPI

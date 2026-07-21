@@ -320,6 +320,11 @@ def test_login_and_register_pages_render_html_htmx_csrf_and_prefix_safe_static_u
     assert "X-Test-CSRF" in combined_html
     assert "csrf-token-123" in combined_html
     assert re.search(r"unsupported|not support|PublicKeyCredential|WebAuthn", combined_html, re.IGNORECASE)
+    # Shared app-factory chrome (same stack as host apps)
+    assert "basecoat-factory" in login.text
+    assert "basecoat-factory" in register.text
+    assert "passkey-ui.css" in login.text
+    assert 'class="passkey-ui app-shell"' in login.text or "passkey-ui app-shell" in login.text
 
 
 def test_existing_api_endpoints_stay_json_and_challenge_cookies_remain_adapter_owned() -> None:

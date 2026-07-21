@@ -44,10 +44,20 @@ class PasskeyTemplateRenderer:
 
 
 def build_template_environment(config: PasskeyUiConfig) -> Environment:
-    return Environment(
+    env = Environment(
         loader=_template_loader(config),
         autoescape=select_autoescape(("html", "xml")),
     )
+    # Same CDN/chrome globals as host apps (basecoat-factory via app-factory).
+    try:
+        from app_factory import configure_jinja_env
+    except ImportError as exc:  # pragma: no cover - install fastapi-htmx extra
+        raise ImportError(
+            "my_auth.fastapi_htmx requires app-factory for Basecoat UI chrome. "
+            "Install: pip install 'my-auth[fastapi-htmx]' (or uv add app-factory)."
+        ) from exc
+    configure_jinja_env(env, include_factory_templates=True)
+    return env
 
 
 def _template_loader(config: PasskeyUiConfig) -> BaseLoader:
@@ -55,10 +65,26 @@ def _template_loader(config: PasskeyUiConfig) -> BaseLoader:
     if config.template_loader is not None and config.template_override_directory is not None:
         raise TemplateLoaderConflictError()
     if config.template_loader is not None:
-        return config.template_loader
+        # Host-supplied loader still needs app-factory partials for base.html includes.
+        try:
+            factory_loader = PackageLoader("app_factory", "templates")
+            return ChoiceLoader([config.template_loader, factory_loader])
+        except Exception:
+            return config.template_loader
     if config.template_override_directory is not None:
-        return ChoiceLoader([FileSystemLoader(config.template_override_directory), packaged_loader])
-    return packaged_loader
+        loaders: list[BaseLoader] = [
+            FileSystemLoader(config.template_override_directory),
+            packaged_loader,
+        ]
+        try:
+            loaders.append(PackageLoader("app_factory", "templates"))
+        except Exception:
+            pass
+        return ChoiceLoader(loaders)
+    try:
+        return ChoiceLoader([packaged_loader, PackageLoader("app_factory", "templates")])
+    except Exception:
+        return packaged_loader
 
 
 async def _maybe_await(value: MaybeAwaitable[T]) -> T:

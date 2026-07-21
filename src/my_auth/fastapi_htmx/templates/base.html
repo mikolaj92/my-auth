@@ -4,9 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Passkey authentication{% endblock %}</title>
+    {# Same chrome as host apps: basecoat-factory + htmx + alpine (app-factory) #}
+    {% include "app_factory/theme_boot.html" %}
+    {% include "app_factory/head_assets.html" %}
+    {# Layout helpers only (passkey-shell / passkey-card) — components from Basecoat #}
     <link rel="stylesheet" href="{{ passkey_css_url }}">
+    {% block head_extra %}{% endblock %}
   </head>
-  <body class="passkey-ui">
+  <body class="passkey-ui app-shell">
     <main class="passkey-shell" aria-labelledby="passkey-page-title">
       {% block content %}{% endblock %}
     </main>

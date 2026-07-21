@@ -1,8 +1,12 @@
+/*! passkey-ui layout helpers — components (btn, card, input) come from basecoat-factory.
+ * Host/apps load Basecoat via app-factory head_assets; this file only centers the ceremony.
+ */
+
 .passkey-ui {
   min-height: 100dvh;
   margin: 0;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-background, var(--background, #fff));
+  color: var(--color-foreground, var(--foreground, #111));
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 
@@ -18,15 +22,13 @@
   width: min(100%, var(--passkey-card-width, 28rem));
 }
 
-/* Basecoat 1.0.2 applies .card pad/gap; keep internal form stacks tight */
+/* Basecoat .card pad/gap; keep form stacks tight */
 .passkey-card__header,
 .passkey-card__content,
 .passkey-form {
   display: grid;
   gap: var(--passkey-panel-gap, 1rem);
 }
-
-/* Host apps must load Basecoat 1.0+ CSS; passkey-ui only adds layout helpers. */
 
 .passkey-eyebrow {
   width: fit-content;
@@ -41,11 +43,16 @@
 }
 
 .passkey-status[data-state="success"] {
-  border-color: var(--success);
-  color: var(--success);
+  border-color: var(--color-success, var(--success, #16a34a));
+  color: var(--color-success, var(--success, #16a34a));
 }
 
 .passkey-status[data-state="error"] {
-  border-color: var(--destructive);
-  color: var(--destructive);
+  border-color: var(--color-destructive, var(--destructive, #dc2626));
+  color: var(--color-destructive, var(--destructive, #dc2626));
+}
+
+/* Align status with Basecoat alert when present */
+.passkey-status.alert {
+  margin: 0;
 }
