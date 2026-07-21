@@ -18,12 +18,15 @@
   width: min(100%, var(--passkey-card-width, 28rem));
 }
 
+/* Basecoat 1.0.2 applies .card pad/gap; keep internal form stacks tight */
 .passkey-card__header,
 .passkey-card__content,
 .passkey-form {
   display: grid;
   gap: var(--passkey-panel-gap, 1rem);
 }
+
+/* Host apps must load Basecoat 1.0+ CSS; passkey-ui only adds layout helpers. */
 
 .passkey-eyebrow {
   width: fit-content;
