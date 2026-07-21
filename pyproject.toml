@@ -35,5 +35,8 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/my_auth"]
