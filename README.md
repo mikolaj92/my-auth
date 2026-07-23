@@ -1,488 +1,200 @@
 # my-auth
 
-Minimalny rdzeń passkey-only auth do współdzielenia między projektami typu FastAPI/Starlette/Jinja bez przepisywania WebAuthn od zera.
+`my-auth` is a passkey-only authentication core for FastAPI/Starlette
+applications. Version 0.2 uses verification-first registration and explicit,
+versioned SQLite schema ownership.
 
-Rdzeń celowo **nie** zawiera middleware, panelu admina ani systemu sesji. Każdy projekt ma już swoje sesje, bazę i layout. Ten pakiet daje:
+The package provides RP configuration, WebAuthn options and verification,
+single-use TTL challenges, passkey models, atomic credential registration,
+compare-and-set sign counters, and optional FastAPI/Jinja/HTMX adapters. It
+does **not** provide application sessions, CSRF middleware, admin policy, local
+user models, or audit policy.
 
-- konfigurację RP (`rp_id`, `rp_name`, `origin`) trzymaną po stronie serwera,
-- generowanie opcji register/login przez `webauthn`,
-- weryfikację register/login przez `webauthn`,
-- jednorazowe challenge z TTL,
-- modele `PasskeyUser` / `PasskeyCredential` i protokół storage,
-- opcjonalny router FastAPI sklejający typowe endpointy z hookami aplikacji,
-- opcjonalny adapter `my_auth.fastapi_htmx` dla serwerowo renderowanych
-  stron FastAPI/Jinja/HTMX/Basecoat,
-- mały vanilla JS helper do `navigator.credentials.create/get`.
+## Install and imports
 
-`my-auth` jest publicznym projektem open-source na licencji MIT:
-<https://github.com/mikolaj92/my-auth>.
-
-## Instalacja z GitHuba
-
-```bash
+```sh
 uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"
-```
-
-Z adapterem FastAPI:
-
-```bash
 uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git"
-```
-
-Z opcjonalnym adapterem FastAPI/Jinja/HTMX UI:
-
-```bash
 uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git"
 ```
 
-Albo lokalnie podczas pracy:
+The core import is `my_auth`. The FastAPI router is explicitly imported from
+`my_auth.fastapi`; the server-rendered UI is explicitly imported from
+`my_auth.fastapi_htmx`. Optional imports are not performed by `import my_auth`.
 
-```bash
-uv add --editable /Users/mini-m4-1/Developer/my-auth
-uv sync --dev
-uv run pytest
-```
-
-Wszystkie komendy w dokumentacji używają `uv` (`uv add`, `uv sync`,
-`uv run`).
-
-## Minimalny backend
+## Core lifecycle and registration ordering
 
 ```python
-from my_auth import (
-    MemoryChallengeStore,
-    PasskeyConfig,
-    PasskeyService,
-    PasskeyUser,
-)
-
-config = PasskeyConfig(
-    rp_id="example.com",              # bez scheme/portu
-    rp_name="Moja aplikacja",
-    origin="https://example.com",     # pełny origin
-)
+from my_auth import MemoryChallengeStore, PasskeyConfig, PasskeyService
 
 passkeys = PasskeyService(
-    config=config,
+    config=PasskeyConfig(
+        rp_id="example.com", rp_name="Example", origin="https://example.com"
+    ),
     challenges=MemoryChallengeStore(),
-    credentials=my_storage_adapter,    # implementuje CredentialStore
+    credentials=credentials,
 )
 ```
+
+`begin_registration(flow_id=..., user=...)` creates options and stores a
+registration challenge. It performs no durable user or credential write.
+`verify_registration(flow_id=..., credential=...)` consumes the one-time
+challenge, verifies WebAuthn, and returns `VerifiedRegistration`; it also does
+not write durable records. The host then calls
+`CredentialStore.save_registration(result)` (or an equivalent shared
+transaction) **after** successful verification. Failed options or verification
+never reach durable registration.
+
+`save_registration` is atomic and idempotent for identical immutable data.
+Ownership conflicts raise `PasskeyUserConflict` or
+`PasskeyCredentialConflict`; records are never reassigned. Login updates use
+`compare_and_set_credential_after_login`. A stale non-zero expected counter
+raises `CredentialCounterConflict`; zero-counter authenticators retain
+zero-to-zero behavior.
+
+## SQLite schema lifecycle
+
+There is one database owner per logical product/RP. `my-auth` owns its
+`passkey_users`, `passkey_credentials`, `passkey_challenges`, and
+`my_auth_schema` tables. Host domain tables and application sessions remain
+host-owned. A product composing `my-auth` with `my-usermanager` should use
+`my_usermanager.adapters.my_auth_sqlite.SQLiteAuthDatabase` as the one shared
+owner rather than constructing independent databases.
+
+Inspection is separate from mutation. Stores never create a schema
+implicitly: inspect first, then explicitly initialize or migrate before
+constructing stores.
+
+```python
+import sqlite3
+from my_auth import ensure_sqlite_schema, inspect_sqlite_schema, migrate_sqlite_schema
+
+with sqlite3.connect("app.sqlite3") as connection:
+    state = inspect_sqlite_schema(connection)
+    if state.state in {"empty", "canonical_unversioned"}:
+        ensure_sqlite_schema(connection)
+    elif state.state == "legacy":
+        migrate_sqlite_schema(connection)
+    elif state.state != "current":
+        raise RuntimeError("unsupported schema: " + "; ".join(state.diagnostics))
+```
+
+The current schema version is `2`. `ensure_sqlite_schema` creates/stamps an
+empty or canonical-unversioned schema and is idempotent; it never migrates a
+legacy layout. `migrate_sqlite_schema` migrates the supported 0.1 layout
+atomically, including the legacy `flow_key` challenge column, and rolls back
+on failure. Both operations require a connection with no pending transaction;
+unsupported layouts are refused. `sqlite_schema_sql()` returns the canonical
+DDL.
+
+Path-mode `SQLiteCredentialStore` and `SQLiteChallengeStore` open a short-lived
+connection per operation and reject path-mode `:memory:`. A caller-owned
+`sqlite3.Connection` is never closed. `transaction_mode="operation"` commits
+that store operation independently; `transaction_mode="external"` uses a
+savepoint and leaves commit/rollback to the caller. Do not use private store
+connections to join a transaction. SQLite connections are thread-affine by
+default: use one connection per thread, or deliberately configure and
+coordinate a shared connection; path-mode stores avoid this issue by opening
+per operation.
 
 ## FastAPI adapter
 
-Adapter daje gotowy kształt tras i ciasteczko flow id dla challenge. Sesja aplikacji, polityka rejestracji i renderowanie stron dalej są po stronie projektu przez hooki.
+`PasskeyRouteHooks` requires these callbacks:
 
-Domyślne trasy:
+- `get_session_user(request)` — current host session user, or `None`;
+- `prepare_registration(request, display_name)` — pure policy/profile step;
+- `complete_registration(request, verified)` — durable host completion, returning
+  an `AuthUser` or `None`;
+- `get_auth_user(user_id)`, `login(response, request, user)`, `logout(response, request)`;
+- `registration_allowed(request)`, `render_login(request)`, and
+  `render_register(request, *, bootstrap)`.
 
-- `GET /login`
-- `GET /register`
-- `POST /logout`
-- `POST /api/auth/login/options`
-- `POST /api/auth/login/verify`
-- `POST /api/auth/register/options`
-- `POST /api/auth/register/verify`
-
-Najkrótsza ścieżka dla nowej aplikacji to factory składający config,
-`PasskeyService` i router:
+Every callback may be synchronous or asynchronous. The router awaits either
+form. Registration policy is checked before options and again before verify;
+then the router verifies, calls durable completion, logs the user in, and calls
+`after_register` as an observer. A `None` completion denies registration and
+prevents login. Observer failures are logged and do not turn an otherwise
+successful login or registration into a 500. Login and registration use
+separate challenge cookies: `passkey_authentication_challenge` and
+`passkey_registration_challenge`. These are WebAuthn flow cookies, not app
+sessions. CSRF middleware is intentionally absent; the host applies its CSRF
+policy.
 
 ```python
-from my_auth import SQLiteChallengeStore, SQLiteCredentialStore
 from my_auth.fastapi import (
     PasskeyFastAPIHooks,
     PasskeyFastAPISettings,
     build_passkey_fastapi_plugin,
 )
 
-settings = PasskeyFastAPISettings.from_env()
-app.include_router(
-    build_passkey_fastapi_plugin(
-        settings=settings,
-        credentials=SQLiteCredentialStore("app.sqlite3"),
-        challenges=SQLiteChallengeStore("app.sqlite3"),
-        hooks=PasskeyFastAPIHooks(
-            get_session_user=get_session_user,
-            make_registration_user=make_registration_user,
-            get_auth_user=get_auth_user,
-            login=login,
-            logout=logout,
-            registration_allowed=registration_allowed,
-            render_login=render_login,
-            render_register=render_register,
-        ),
-    )
-)
-```
-
-`PasskeyFastAPISettings.from_env()` czyta `PASSKEY_RP_ID`,
-`PASSKEY_RP_NAME`, `PASSKEY_ORIGIN` oraz opcjonalnie m.in.
-`PASSKEY_CHALLENGE_TTL_SECONDS`, `PASSKEY_COOKIE_SECURE`,
-`PASSKEY_LOGIN_PAGE` i `PASSKEY_CHALLENGE_COOKIE`. Dla aplikacji z własnym
-prefixem użyj np. `PasskeyFastAPISettings.from_env(prefix="CONTROL_PLANE_")`.
-
-Bootstrap rejestracji i dodawanie kolejnej passkey pozostają w hookach:
-`registration_allowed` decyduje, czy flow jest dozwolony, a
-`get_session_user` sprawia, że zalogowany użytkownik rejestruje dodatkową
-passkey zamiast tworzyć nowe konto.
-
-```python
-from fastapi import FastAPI, Request, Response
-from starlette.responses import HTMLResponse
-
-from my_auth import PasskeyCredential, PasskeyUser
-from my_auth.fastapi import AuthUser, PasskeyAuthRouter, PasskeyRouteHooks
-
-
-async def get_session_user(request: Request) -> AuthUser | None:
-    user_id = request.session.get("user_id")
-    return await users.get_passkey_user(user_id) if user_id else None
-
-
-async def make_registration_user(request: Request, display_name: str) -> AuthUser:
-    # Twórz tylko dla bootstrap/invite flow zaakceptowanego przez registration_allowed.
-    return PasskeyUser(
-        user_id=await users.next_user_id(),
-        user_handle=await users.random_user_handle(),
-        name=display_name,
-        display_name=display_name,
-    )
-
-
-async def get_auth_user(user_id: str) -> AuthUser | None:
-    return await users.get_passkey_user(user_id)
-
-
-async def login(response: Response, request: Request, user: AuthUser) -> None:
-    request.session.clear()  # prevent session fixation
-    request.session["user_id"] = user.user_id
-
-
-async def logout(response: Response, request: Request) -> None:
-    request.session.clear()
-
-
-async def registration_allowed(request: Request) -> bool:
-    return bool(request.session.get("invite_ok") or request.session.get("user_id"))
-
-
-def render_login(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "login.html")
-
-
-def render_register(request: Request, *, bootstrap: bool) -> HTMLResponse:
-    return templates.TemplateResponse(request, "register.html", {"bootstrap": bootstrap})
-
-
-async def after_register(
-    request: Request,
-    user: AuthUser,
-    credential: PasskeyCredential,
-) -> None:
-    await audit.log("passkey.register", user.user_id, credential.id_b64url)
-
-
-app = FastAPI()
-app.include_router(
-    PasskeyAuthRouter(
-        service=passkeys,
-        hooks=PasskeyRouteHooks(
-            get_session_user=get_session_user,
-            make_registration_user=make_registration_user,
-            get_auth_user=get_auth_user,
-            login=login,
-            logout=logout,
-            registration_allowed=registration_allowed,
-            render_login=render_login,
-            render_register=render_register,
-            after_register=after_register,
-        ),
-    ).router
-)
-```
-
-Challenge flow id siedzi w ciasteczku `passkey_challenge` (`HttpOnly`, `Secure`, `SameSite=Lax`, TTL z `PasskeyConfig.challenge_ttl_seconds`). Adapter usuwa legacy `response.userHandle` przy loginie, bo część przeglądarek nadal potrafi go wysłać mimo discoverable credentials.
-
-Wyjątek od zasady host-owned cookies dotyczy tylko istniejącego flow
-WebAuthn: `PasskeyAuthRouter` zarządza ciasteczkami challenge
-`passkey_challenge` oraz `passkey_register_name`. Te ciasteczka służą do
-jednorazowych opcji/weryfikacji WebAuthn. Adaptery nie przejmują własności
-produkcyjnych sesji aplikacji ani app cookies.
-
-## FastAPI/Jinja/HTMX UI adapter
-
-Extra `fastapi-htmx` dodaje opt-in adapter `my_auth.fastapi_htmx` dla
-serwerowo renderowanych stron passkey. Root import pozostaje lekki:
-`import my_auth` nie importuje FastAPI, Starlette, Jinja ani zasobów UI.
-Importuj adapter jawnie tylko w hostach, które zainstalowały extra:
-
-```python
-from fastapi import FastAPI
-from my_auth.fastapi import PasskeyRouteHooks
-from my_auth.fastapi_htmx import (
-    PasskeyUiConfig,
-    PasskeyUiRouter,
-    create_passkey_ui_router,
-    passkey_ui_static_files,
-)
-
-app = FastAPI()
-hooks = PasskeyRouteHooks(
+hooks = PasskeyFastAPIHooks(
     get_session_user=get_session_user,
-    make_registration_user=make_registration_user,
+    prepare_registration=prepare_registration,
+    complete_registration=complete_registration,
     get_auth_user=get_auth_user,
     login=login,
     logout=logout,
     registration_allowed=registration_allowed,
-    render_login=render_login_placeholder,
-    render_register=render_register_placeholder,
-    after_register=after_register,
-    after_login=after_login,
+    render_login=render_login,
+    render_register=render_register,
 )
-
-passkey_ui: PasskeyUiRouter = create_passkey_ui_router(
-    service=passkeys,
-    hooks=hooks,
-    config=PasskeyUiConfig(
-        login_success_url="/account",
-        register_success_url="/account",
-    ),
-)
-app.include_router(passkey_ui.router)
-app.mount(
-    passkey_ui.static_mount_path,
-    passkey_ui.static_files,
-    name="my_auth_fastapi_htmx_static",
-)
-```
-
-`create_passkey_ui_router` zwraca obiekt z polami `router`,
-`static_mount_path` i `static_files`. Host montuje statyczne pliki jawnie
-przez zwrócone `static_mount_path` oraz `static_files`. Jeśli potrzebujesz
-samego obiektu `StaticFiles`, publiczny helper `passkey_ui_static_files()`
-zwraca mount dla pakietowych `passkey-ui.js`, `passkey.js` i
-`passkey-ui.css`.
-
-`PasskeyUiConfig` pozwala zmienić `paths`, `cookies`, `static_mount_path`,
-`static_url_path`, `passkey_js_url`, CSRF header/token metadata, redirecty po
-sukcesie oraz template overrides. `/api/auth/*` nadal pozostaje JSON API z
-`PasskeyAuthRouter`; HTMX/Jinja dotyczy stron i fragmentów UI, nie formatu
-WebAuthn verify/options.
-
-### Nadpisywanie templatek
-
-Template loader wybierany jest deterministycznie:
-
-1. Jeśli podasz `template_loader`, custom Jinja loader wygrywa.
-2. W przeciwnym razie `template_override_directory` tworzy `ChoiceLoader`, w
-   którym katalog hosta ma pierwszeństwo, a pakietowe templaty są fallbackiem.
-3. Bez obu opcji używane są wyłącznie pakietowe templaty.
-4. Podanie jednocześnie `template_loader` i `template_override_directory` jest
-   niepoprawne i kończy się `ValueError`.
-
-Przykład katalogu override:
-
-```python
-from pathlib import Path
-from my_auth.fastapi_htmx import PasskeyUiConfig
-
-config = PasskeyUiConfig(
-    template_override_directory=Path("app/templates/my_auth_fastapi_htmx"),
-)
-```
-
-Przykład pełnego custom loadera:
-
-```python
-from jinja2 import DictLoader
-from my_auth.fastapi_htmx import PasskeyUiConfig
-
-config = PasskeyUiConfig(
-    template_loader=DictLoader({"login.html": "<main>Custom login</main>"}),
-)
-```
-
-### WebAuthn i bezpieczeństwo hosta
-
-Passkeys wymagają bezpiecznego kontekstu przeglądarki: HTTPS w produkcji albo
-lokalny secure context, np. `localhost` podczas developmentu. UI powinien mieć
-normalny fallback/komunikat dla przeglądarek bez obsługi WebAuthn.
-
-Host aplikacji nadal jest właścicielem: sessions, app cookies, CSRF
-validation, persistence, registration policy, local user provisioning, admin
-checks, role/grant changes, audit logging, redirects oraz logout effects.
-Security ownership checklist: sessions; app cookies; CSRF validation;
-persistence; registration policy; local user provisioning; admin checks;
-role/grant changes; audit logging; redirects; logout effects.
-Adapter passkey UI nie tworzy produkcyjnej sesji, nie zapisuje użytkowników,
-nie nadaje ról, nie zmienia grantów i nie implementuje polityki admina.
-
-Adapter jest bez React, shadcn, Tailwind, npm, bundlera i SPA. To
-server-rendered FastAPI/Jinja/HTMX/Basecoat plus małe moduły vanilla JS.
-
-Route-shape dla FastAPI/Starlette:
-
-```python
-@router.post("/auth/passkey/register/options")
-async def register_options(request):
-    # flow_id może być session id, invite token albo bootstrap token
-    user = PasskeyUser(
-        user_id="app-user-id",
-        user_handle=b"stable-random-32-bytes",
-        name="mikolaj",
-        display_name="Mikołaj",
+app.include_router(
+    build_passkey_fastapi_plugin(
+        settings=PasskeyFastAPISettings.from_env(),
+        credentials=credentials,
+        challenges=challenges,
+        hooks=hooks,
     )
-    return passkeys.begin_registration(flow_id=request.session["flow"], user=user)
-
-@router.post("/auth/passkey/register/verify")
-async def register_verify(request):
-    credential = passkeys.finish_registration(
-        flow_id=request.session["flow"],
-        credential=await request.json(),
-    )
-    return {"credential_id": credential.id_b64url}
-
-@router.post("/auth/passkey/login/options")
-async def login_options(request):
-    return passkeys.begin_authentication(flow_id=request.session["flow"])
-
-@router.post("/auth/passkey/login/verify")
-async def login_verify(request):
-    result = passkeys.finish_authentication(
-        flow_id=request.session["flow"],
-        credential=await request.json(),
-    )
-    request.session.clear()  # prevent session fixation
-    request.session["user_id"] = result.user.user_id
-    return {"ok": True}
-```
-
-## Storage
-
-Produkcja powinna trzymać użytkowników i credentiale w bazie aplikacji. Ważne: jeden użytkownik może mieć wiele passkey, więc `user_handle` jest unikalny dla użytkownika, **nie** dla credentiala.
-
-Najprostszy wspólny adapter to `SQLiteCredentialStore`:
-
-```python
-from my_auth import SQLiteCredentialStore
-
-credentials = SQLiteCredentialStore("app.sqlite3")
-passkeys = PasskeyService(
-    config=config,
-    challenges=MemoryChallengeStore(),
-    credentials=credentials,
 )
 ```
 
-Adapter tworzy standardowy schemat idempotentnie, zapisuje `credential_id` i
-`user_handle` jako base64url, wspiera wiele credentiali per user, aktualizuje
-sign-count po loginie, listuje credentiale usera i pozwala usunąć credential:
+`PasskeyFastAPISettings.from_env()` requires `PASSKEY_RP_ID`,
+`PASSKEY_RP_NAME`, and `PASSKEY_ORIGIN`; it also supports the documented
+`PASSKEY_*` timeout, verification, path, and cookie settings. The default
+routes are `GET /login`, `GET /register`, `POST /logout`, and JSON
+`POST /api/auth/{login,register}/{options,verify}`.
+
+The `fastapi-htmx` adapter wraps the same router with packaged Jinja templates
+and static JavaScript. It does not change WebAuthn verification, registration
+ordering, or transaction semantics:
 
 ```python
-credentials.delete_credential(credential_id, user_id=current_user_id)
+from my_auth.fastapi_htmx import PasskeyUiConfig, create_passkey_ui_router
+
+ui = create_passkey_ui_router(service=passkeys, hooks=hooks, config=PasskeyUiConfig())
+app.include_router(ui.router)
+app.mount(ui.static_mount_path, ui.static_files, name="my_auth_static")
 ```
 
-```sql
-CREATE TABLE passkey_users (
-  user_id TEXT PRIMARY KEY,
-  user_handle TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL,
-  display_name TEXT
-);
+## Ownership matrix
 
-CREATE TABLE passkey_credentials (
-  credential_id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES passkey_users(user_id),
-  public_key BLOB NOT NULL,
-  sign_count INTEGER NOT NULL DEFAULT 0,
-  transports TEXT,
-  device_type TEXT,
-  backed_up INTEGER,
-  label TEXT,
-  created_at TEXT NOT NULL
-);
-```
+| Concern | Owner |
+| --- | --- |
+| RP configuration, WebAuthn verification, challenge consumption | `my-auth` |
+| Passkey tables and auth schema version/migration | `my-auth` (or the shared `SQLiteAuthDatabase` owner) |
+| Local users, external identity links, roles, grants, audit rows | host / `my-usermanager` |
+| Application sessions, app cookies, CSRF, logout effects | host application |
+| Registration policy and local provisioning | host callback |
+| Atomic verified registration across passkey + UM records | shared transaction owner |
+| Observer side effects (`after_register`, `after_login`) | host callback; failures are non-fatal |
 
-Kod powinien mapować `credential_id`, `public_key` i `user_handle` jako bytes w Pythonie, a w JSON/SQL jako base64url string.
+## 0.1 to 0.2 mapping
 
-Jeśli host używa SQLAlchemy, nie dokładaj drugiej bazy ani zależności do
-`my-auth`: odwzoruj powyższe tabele jako modele aplikacji i zaimplementuj
-metody protokołu `CredentialStore` (`save_user`, `get_user`,
-`get_user_by_handle`, `list_credentials_for_user`, `get_credential`,
-`save_credential`, `update_credential_after_login`, `delete_credential`).
-Kolumny i konwersje są takie same jak w schemacie SQLite; `transports` to JSON
-array albo `NULL`, `backed_up` to nullable boolean/integer, a `created_at` to
-ISO datetime.
+| 0.1 API or behavior | 0.2 API or behavior |
+| --- | --- |
+| `PasskeyRouteHooks.make_registration_user` | `prepare_registration` for pure preparation, followed by `complete_registration` after verification |
+| `PasskeyService.finish_registration` | `PasskeyService.verify_registration`, returning `VerifiedRegistration` without a durable write |
+| One shared `PasskeyCookies.challenge` | Separate `PasskeyCookies.authentication_challenge` and `registration_challenge` |
+| `PasskeyCookies.register_name` | Removed; the registration challenge stores the prepared user |
+| Implicit schema creation in SQLite stores | Removed; call `inspect_sqlite_schema`, then `ensure_sqlite_schema` or `migrate_sqlite_schema` |
+| Unversioned canonical schema / `flow_key` challenge column | Version 2 schema with `my_auth_schema` and `key`; migrate supported legacy layouts explicitly |
+| Independent store commits for a cross-product registration | `transaction_mode="external"` stores inside the caller-owned shared transaction |
+| Host completion after the router's credential lookup | Completion receives verified registration and is the durable registration boundary |
 
-## Challenge storage
+## Security and browser requirements
 
-`MemoryChallengeStore` jest dobry do testów, lokalnego developmentu i jednego
-procesu. Przy wielu workerach albo wielu instancjach aplikacji użyj wspólnego
-store, np. SQLite:
-
-```python
-from my_auth import SQLiteChallengeStore
-
-challenges = SQLiteChallengeStore("app.sqlite3")
-```
-
-`SQLiteChallengeStore.pop(...)` robi atomowe `DELETE ... RETURNING`, więc
-challenge jest jednorazowy również wtedy, gdy drugi worker próbuje użyć tego
-samego flow. Wygasłe rekordy są odrzucane i można je sprzątać okresowo:
-
-```python
-deleted_count = challenges.cleanup_expired()
-```
-
-Standardowy schemat challenge store:
-
-```sql
-CREATE TABLE passkey_challenges (
-  key TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  challenge BLOB NOT NULL,
-  expires_at TEXT NOT NULL,
-  user_id TEXT,
-  user_handle TEXT,
-  user_name TEXT,
-  user_display_name TEXT,
-  PRIMARY KEY (key, kind)
-);
-
-CREATE INDEX idx_passkey_challenges_expires_at
-  ON passkey_challenges(expires_at);
-```
-
-## Passkey-only zasady
-
-- Login bez username/password wymaga discoverable credentials / resident keys.
-- Rejestracja używa `residentKey: "required"` i domyślnie `userVerification: "required"`.
-- Login domyślnie wysyła puste `allowCredentials`, żeby browser mógł pokazać passkeys dla RP.
-- Challenge są jednorazowe, rozdzielone na `registration` / `authentication`, z TTL 300 sekund.
-- Rejestracja musi być zamknięta: bootstrap token, invite token albo już-zalogowany użytkownik dodający kolejną passkey.
-- Recovery bez hasła: wymagaj/dramatycznie zachęcaj do drugiej passkey + admin CLI/invite reset dla istniejącego usera.
-
-## Security checklist w aplikacji
-
-- HTTPS w produkcji. `http://localhost` tylko lokalnie.
-- `rp_id` i `origin` z env/config po stronie serwera; nigdy z requestu klienta.
-- Secure, HttpOnly, SameSite cookies.
-- Po loginie wyczyść/odnów session id, żeby uniknąć session fixation.
-- POST verify/logout chroń CSRF-em albo ogranicz endpointy do same-site session flow.
-- Nie implementuj WebAuthn crypto samodzielnie; ten pakiet deleguje to do `webauthn`.
-
-## Frontend
-
-Skopiuj albo wystaw `src/my_auth/static/passkey.js` i użyj:
-
-```html
-<script type="module">
-  import { loginPasskey, registerPasskey } from "/static/passkey.js";
-
-  document.querySelector("#login").addEventListener("click", () => loginPasskey());
-  document.querySelector("#register").addEventListener("click", () =>
-    registerPasskey({ displayName: document.querySelector("#display-name").value }),
-  );
-</script>
-```
-
-Dla zalogowanego użytkownika dodającego kolejną passkey możesz wywołać `registerPasskey()` bez `displayName`, bo adapter użyje użytkownika z `get_session_user`.
+Use HTTPS in production; `http://localhost` is allowed for local development.
+Keep `rp_id` and `origin` server-configured, use Secure/HttpOnly/SameSite flow
+cookies, rotate or clear the host session on login, and protect state-changing
+routes with host CSRF controls. WebAuthn browsers without support need a
+host-provided recovery or fallback path.

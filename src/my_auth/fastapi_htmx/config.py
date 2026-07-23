@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
+from typing_extensions import override
+
 from fastapi import Request
 from jinja2 import BaseLoader
 
@@ -20,6 +22,7 @@ def no_csrf_token(_request: Request) -> str | None:
 
 @dataclass(frozen=True, slots=True)
 class TemplateLoaderConflictError(ValueError):
+    @override
     def __str__(self) -> str:
         return "template_loader and template_override_directory are mutually exclusive"
 
@@ -41,5 +44,8 @@ class PasskeyUiConfig:
     register_error_target_id: str = "passkey-register-status"
 
     def __post_init__(self) -> None:
-        if self.template_loader is not None and self.template_override_directory is not None:
+        if (
+            self.template_loader is not None
+            and self.template_override_directory is not None
+        ):
             raise TemplateLoaderConflictError()

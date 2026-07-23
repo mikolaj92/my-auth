@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from my_auth.passkeys import PasskeyService
 
 from fastapi import APIRouter
 from starlette.staticfiles import StaticFiles
@@ -19,10 +22,9 @@ class PasskeyUiRouter:
     static_mount_path: str
     static_files: StaticFiles
 
-
 def create_passkey_ui_router(
     *,
-    service: Any,
+    service: PasskeyService,
     hooks: PasskeyRouteHooks,
     config: PasskeyUiConfig | None = None,
 ) -> PasskeyUiRouter:
@@ -33,7 +35,8 @@ def create_passkey_ui_router(
     )
     wrapped_hooks = PasskeyRouteHooks(
         get_session_user=hooks.get_session_user,
-        make_registration_user=hooks.make_registration_user,
+        prepare_registration=hooks.prepare_registration,
+        complete_registration=hooks.complete_registration,
         get_auth_user=hooks.get_auth_user,
         login=hooks.login,
         logout=hooks.logout,
