@@ -4,18 +4,12 @@ import inspect
 from dataclasses import dataclass
 from typing import TypeVar
 
+from app_factory.jinja import configure_jinja_env
 from fastapi import Request
-from jinja2 import (
-    BaseLoader,
-    ChoiceLoader,
-    Environment,
-    FileSystemLoader,
-    PackageLoader,
-    select_autoescape,
-)
+from jinja2 import ChoiceLoader, Environment, PackageLoader, select_autoescape
 from starlette.responses import HTMLResponse, Response
 
-from .config import MaybeAwaitable, PasskeyUiConfig, TemplateLoaderConflictError
+from .config import MaybeAwaitable, PasskeyUiConfig
 
 T = TypeVar("T")
 
@@ -40,10 +34,8 @@ class PasskeyTemplateRenderer:
             request=request,
             paths=self.config.paths,
             bootstrap=bootstrap,
-            passkey_js_url=self.config.passkey_js_url,
-            passkey_css_url=f"{static_base}/passkey-ui.css"
-            if static_base
-            else "/passkey-ui.css",
+            passkey_js_url=f"{static_base}/passkey-ui.js",
+            passkey_css_url=f"{static_base}/passkey-ui.css",
             csrf_header_name=self.config.csrf_header_name,
             csrf_token=csrf_token,
             login_success_url=self.config.login_success_url,
@@ -54,27 +46,18 @@ class PasskeyTemplateRenderer:
         return HTMLResponse(content)
 
 
-def build_template_environment(config: PasskeyUiConfig) -> Environment:
-    return Environment(
-        loader=_template_loader(config),
+def build_template_environment(_config: PasskeyUiConfig) -> Environment:
+    environment = Environment(
+        loader=ChoiceLoader(
+            [
+                PackageLoader("my_auth.fastapi_htmx", "templates"),
+                PackageLoader("app_factory", "templates"),
+            ]
+        ),
         autoescape=select_autoescape(("html", "xml")),
     )
-
-
-def _template_loader(config: PasskeyUiConfig) -> BaseLoader:
-    packaged_loader = PackageLoader("my_auth.fastapi_htmx", "templates")
-    if (
-        config.template_loader is not None
-        and config.template_override_directory is not None
-    ):
-        raise TemplateLoaderConflictError()
-    if config.template_loader is not None:
-        return config.template_loader
-    if config.template_override_directory is not None:
-        return ChoiceLoader(
-            [FileSystemLoader(config.template_override_directory), packaged_loader]
-        )
-    return packaged_loader
+    configure_jinja_env(environment)
+    return environment
 
 
 async def _maybe_await(value: MaybeAwaitable[T]) -> T:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import contextmanager
@@ -214,7 +215,11 @@ class CredentialStore(Protocol):
         backed_up: bool | None,
     ) -> PasskeyCredential: ...
     def delete_credential(
-        self, credential_id: bytes, *, user_id: str | None = None
+        self,
+        credential_id: bytes,
+        *,
+        user_id: str | None = None,
+        require_remaining: bool = False,
     ) -> bool: ...
 
 
@@ -294,36 +299,40 @@ class MemoryCredentialStore:
         self.users: dict[str, PasskeyUser] = {}
         self.users_by_handle: dict[bytes, str] = {}
         self.credentials: dict[bytes, PasskeyCredential] = {}
+        self._lock = threading.RLock()
 
     def save_registration(self, result: VerifiedRegistration) -> None:
-        user, credential = result.user, result.credential
-        if credential.user_id != user.user_id:
-            raise PasskeyCredentialConflict("passkey credential ownership conflict")
-        old = self.users.get(user.user_id)
-        by_handle = self.users_by_handle.get(user.user_handle)
-        if (old is not None and old != user) or (
-            by_handle is not None and by_handle != user.user_id
-        ):
-            raise PasskeyUserConflict("passkey user ownership conflict")
-        existing = self.credentials.get(credential.credential_id)
-        if existing is not None and (
-            existing.user_id != credential.user_id
-            or existing.public_key != credential.public_key
-        ):
-            raise PasskeyCredentialConflict("passkey credential ownership conflict")
-        self.users[user.user_id] = user
-        self.users_by_handle[user.user_handle] = user.user_id
-        self.credentials.setdefault(credential.credential_id, credential)
+        with self._lock:
+            user, credential = result.user, result.credential
+            if credential.user_id != user.user_id:
+                raise PasskeyCredentialConflict("passkey credential ownership conflict")
+            old = self.users.get(user.user_id)
+            by_handle = self.users_by_handle.get(user.user_handle)
+            if (old is not None and old != user) or (
+                by_handle is not None and by_handle != user.user_id
+            ):
+                raise PasskeyUserConflict("passkey user ownership conflict")
+            existing = self.credentials.get(credential.credential_id)
+            if existing is not None and (
+                existing.user_id != credential.user_id
+                or existing.public_key != credential.public_key
+            ):
+                raise PasskeyCredentialConflict("passkey credential ownership conflict")
+            self.users[user.user_id] = user
+            self.users_by_handle[user.user_handle] = user.user_id
+            self.credentials.setdefault(credential.credential_id, credential)
 
     def get_user(self, user_id: str) -> PasskeyUser | None:
         return self.users.get(user_id)
 
     def get_user_by_handle(self, user_handle: bytes) -> PasskeyUser | None:
-        user_id = self.users_by_handle.get(user_handle)
-        return self.users.get(user_id) if user_id else None
+        with self._lock:
+            user_id = self.users_by_handle.get(user_handle)
+            return self.users.get(user_id) if user_id else None
 
     def list_credentials_for_user(self, user_id: str) -> Iterable[PasskeyCredential]:
-        return [c for c in self.credentials.values() if c.user_id == user_id]
+        with self._lock:
+            return [c for c in self.credentials.values() if c.user_id == user_id]
 
     def get_credential(self, credential_id: bytes) -> PasskeyCredential | None:
         return self.credentials.get(credential_id)
@@ -337,26 +346,43 @@ class MemoryCredentialStore:
         device_type: str | None,
         backed_up: bool | None,
     ) -> PasskeyCredential:
-        credential = self.credentials.get(credential_id)
-        if credential is None:
-            raise CredentialNotFound("unknown passkey credential")
-        if expected_sign_count and credential.sign_count != expected_sign_count:
-            raise CredentialCounterConflict("credential counter changed concurrently")
-        if new_sign_count < credential.sign_count:
-            raise CredentialCounterConflict("credential counter cannot regress")
-        credential.sign_count = max(credential.sign_count, new_sign_count)
-        credential.device_type = device_type
-        credential.backed_up = backed_up
-        return credential
+        with self._lock:
+            credential = self.credentials.get(credential_id)
+            if credential is None:
+                raise CredentialNotFound("unknown passkey credential")
+            if expected_sign_count and credential.sign_count != expected_sign_count:
+                raise CredentialCounterConflict(
+                    "credential counter changed concurrently"
+                )
+            if new_sign_count < credential.sign_count:
+                raise CredentialCounterConflict("credential counter cannot regress")
+            credential.sign_count = max(credential.sign_count, new_sign_count)
+            credential.device_type = device_type
+            credential.backed_up = backed_up
+            return credential
 
     def delete_credential(
-        self, credential_id: bytes, *, user_id: str | None = None
+        self,
+        credential_id: bytes,
+        *,
+        user_id: str | None = None,
+        require_remaining: bool = False,
     ) -> bool:
-        c = self.credentials.get(credential_id)
-        if c is None or user_id is not None and c.user_id != user_id:
-            return False
-        del self.credentials[credential_id]
-        return True
+        with self._lock:
+            c = self.credentials.get(credential_id)
+            if c is None or user_id is not None and c.user_id != user_id:
+                return False
+            if (
+                require_remaining
+                and sum(
+                    credential.user_id == c.user_id
+                    for credential in self.credentials.values()
+                )
+                <= 1
+            ):
+                return False
+            del self.credentials[credential_id]
+            return True
 
 
 def _utc(value: datetime) -> datetime:
@@ -445,6 +471,19 @@ class _SQLiteBase:
         self._path = None if self._external else str(database)
         if self._path == ":memory:":
             raise ValueError("path-mode :memory: is unsupported; provide a connection")
+        if transaction_mode == "external":
+            if self._external is None:
+                raise RuntimeError(
+                    "external transaction mode requires a caller-owned sqlite connection"
+                )
+            if not self._external.in_transaction:
+                raise RuntimeError(
+                    "external transaction mode requires an active caller transaction"
+                )
+            if self._external.execute("PRAGMA foreign_keys").fetchone()[0] != 1:
+                raise RuntimeError(
+                    "external transaction mode requires PRAGMA foreign_keys=ON"
+                )
         self.transaction_mode = transaction_mode
         if self._external is not None:
             check = self._external
@@ -452,26 +491,22 @@ class _SQLiteBase:
             assert self._path is not None
             check = sqlite3.connect(self._path, timeout=30)
         try:
-            names = {
-                row[0]
-                for row in check.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                )
-            }
-            if not {
-                "passkey_users",
-                "passkey_credentials",
-                "passkey_challenges",
-            }.issubset(names):
-                raise RuntimeError(
-                    "my-auth schema is not initialized; call ensure_sqlite_schema"
-                )
+            from .sqlite_schema import inspect_sqlite_schema
+
+            inspection = inspect_sqlite_schema(check)
+            if inspection.state != "current":
+                detail = "; ".join(inspection.diagnostics)
+                if inspection.state == "legacy":
+                    detail = "legacy schema requires migration"
+                elif not detail:
+                    detail = f"schema state is {inspection.state}"
+                raise RuntimeError(f"my-auth schema is not current: {detail}")
         finally:
             if self._external is None:
                 check.close()
 
     @contextmanager
-    def _connection(self, *, mutation: bool = False):
+    def _connection(self, *, mutation: bool = False, serialized: bool = False):
         if self._external is not None:
             conn = self._external
         else:
@@ -486,12 +521,20 @@ class _SQLiteBase:
         try:
             if mutation:
                 if self.transaction_mode == "external":
+                    if not conn.in_transaction:
+                        raise RuntimeError(
+                            "external transaction mode requires an active caller transaction"
+                        )
+                    if conn.execute("PRAGMA foreign_keys").fetchone()[0] != 1:
+                        raise RuntimeError(
+                            "external transaction mode requires PRAGMA foreign_keys=ON"
+                        )
                     marker = "sp_" + bytes_to_b64url(
                         __import__("secrets").token_bytes(8)
                     ).replace("-", "_")
                     conn.execute(f"SAVEPOINT {marker}")
                 else:
-                    conn.execute("BEGIN")
+                    conn.execute("BEGIN IMMEDIATE" if serialized else "BEGIN")
             yield conn
             if mutation:
                 if self.transaction_mode == "external":
@@ -500,10 +543,10 @@ class _SQLiteBase:
                     conn.commit()
         except Exception:
             if mutation:
-                if self.transaction_mode == "external":
+                if self.transaction_mode == "external" and marker is not None:
                     conn.execute(f"ROLLBACK TO SAVEPOINT {marker}")
                     conn.execute(f"RELEASE SAVEPOINT {marker}")
-                else:
+                elif self.transaction_mode != "external":
                     conn.rollback()
             raise
         finally:
@@ -707,15 +750,47 @@ class SQLiteCredentialStore(_SQLiteBase):
             )
 
     def delete_credential(
-        self, credential_id: bytes, *, user_id: str | None = None
+        self,
+        credential_id: bytes,
+        *,
+        user_id: str | None = None,
+        require_remaining: bool = False,
     ) -> bool:
-        with self._connection(mutation=True) as conn:
-            sql = "DELETE FROM passkey_credentials WHERE credential_id=?"
-            args: tuple[Any, ...] = (bytes_to_b64url(credential_id),)
-            if user_id is not None:
-                sql += " AND user_id=?"
-                args += (user_id,)
-            return conn.execute(sql, args).rowcount > 0
+        with self._connection(mutation=True, serialized=require_remaining) as conn:
+            key = bytes_to_b64url(credential_id)
+            if require_remaining and self.transaction_mode == "external":
+                # A deferred caller transaction must own the write lock before
+                # reading the count, otherwise concurrent deletes can share a
+                # stale snapshot and both remove the final credentials.
+                conn.execute(
+                    "UPDATE passkey_credentials SET credential_id=credential_id WHERE credential_id=?"
+                    + (" AND user_id=?" if user_id is not None else ""),
+                    (key,) if user_id is None else (key, user_id),
+                )
+            row = conn.execute(
+                "SELECT user_id FROM passkey_credentials WHERE credential_id=?"
+                + (" AND user_id=?" if user_id is not None else ""),
+                (key,) if user_id is None else (key, user_id),
+            ).fetchone()
+            if row is None:
+                return False
+            if (
+                require_remaining
+                and conn.execute(
+                    "SELECT COUNT(*) FROM passkey_credentials WHERE user_id=?",
+                    (row[0],),
+                ).fetchone()[0]
+                <= 1
+            ):
+                return False
+            return (
+                conn.execute(
+                    "DELETE FROM passkey_credentials WHERE credential_id=?"
+                    + (" AND user_id=?" if user_id is not None else ""),
+                    (key,) if user_id is None else (key, user_id),
+                ).rowcount
+                > 0
+            )
 
 
 class PasskeyService:

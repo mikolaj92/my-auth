@@ -38,8 +38,10 @@ class RenderRegister(Protocol):
         self, request: Request, *, bootstrap: bool
     ) -> MaybeAwaitable[Response]: ...
 
+
 class _PasskeyServiceAPI(Protocol):
     config: PasskeyConfig
+
     def begin_authentication(
         self,
         *,
@@ -55,7 +57,9 @@ class _PasskeyServiceAPI(Protocol):
         require_user_handle: bool = True,
     ) -> AuthenticationResult: ...
 
-    def begin_registration(self, *, flow_id: str, user: PasskeyUser) -> dict[str, object]: ...
+    def begin_registration(
+        self, *, flow_id: str, user: PasskeyUser
+    ) -> dict[str, object]: ...
 
     def verify_registration(
         self, *, flow_id: str, credential: Mapping[str, object] | str
@@ -214,20 +218,34 @@ class PasskeyAuthRouter:
         self._add_routes()
 
     def _add_routes(self) -> None:
-        self.router.add_api_route(self.paths.login_page, self.login_page, methods=["GET"])
-        self.router.add_api_route(self.paths.register_page, self.register_page, methods=["GET"])
+        self.router.add_api_route(
+            self.paths.login_page, self.login_page, methods=["GET"]
+        )
+        self.router.add_api_route(
+            self.paths.register_page, self.register_page, methods=["GET"]
+        )
         self.router.add_api_route(self.paths.logout, self.logout, methods=["POST"])
-        self.router.add_api_route(self.paths.login_options, self.login_options, methods=["POST"])
-        self.router.add_api_route(self.paths.login_verify, self.login_verify, methods=["POST"])
-        self.router.add_api_route(self.paths.register_options, self.register_options, methods=["POST"])
-        self.router.add_api_route(self.paths.register_verify, self.register_verify, methods=["POST"])
+        self.router.add_api_route(
+            self.paths.login_options, self.login_options, methods=["POST"]
+        )
+        self.router.add_api_route(
+            self.paths.login_verify, self.login_verify, methods=["POST"]
+        )
+        self.router.add_api_route(
+            self.paths.register_options, self.register_options, methods=["POST"]
+        )
+        self.router.add_api_route(
+            self.paths.register_verify, self.register_verify, methods=["POST"]
+        )
 
     async def login_page(self, request: Request) -> Response:
         return await _maybe_await(self.hooks.render_login(request))
 
     async def register_page(self, request: Request) -> Response:
         user = await _maybe_await(self.hooks.get_session_user(request))
-        return await _maybe_await(self.hooks.render_register(request, bootstrap=user is None))
+        return await _maybe_await(
+            self.hooks.render_register(request, bootstrap=user is None)
+        )
 
     async def login_options(self) -> Response:
         flow_id = self._new_flow_id()
@@ -239,12 +257,16 @@ class PasskeyAuthRouter:
         flow_id = self._challenge_cookie(request, self.cookies.authentication_challenge)
         credential = _without_legacy_user_handle(await _json_body(request))
         try:
-            result = self.service.finish_authentication(flow_id=flow_id, credential=credential, require_user_handle=False)
+            result = self.service.finish_authentication(
+                flow_id=flow_id, credential=credential, require_user_handle=False
+            )
         except AUTH_ERRORS as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         user = await _maybe_await(self.hooks.get_auth_user(result.user.user_id))
         if user is None:
-            raise HTTPException(status_code=403, detail="authenticated user is not allowed")
+            raise HTTPException(
+                status_code=403, detail="authenticated user is not allowed"
+            )
         response = JSONResponse({"ok": True})
         self._delete_cookie(response, self.cookies.authentication_challenge)
         await _maybe_await(self.hooks.login(response, request, user))
@@ -256,34 +278,52 @@ class PasskeyAuthRouter:
 
     async def register_options(self, request: Request) -> Response:
         if not await _maybe_await(self.hooks.registration_allowed(request)):
-            raise HTTPException(status_code=403, detail="passkey registration is not allowed")
+            raise HTTPException(
+                status_code=403, detail="passkey registration is not allowed"
+            )
         session_user = await _maybe_await(self.hooks.get_session_user(request))
-        user = session_user or await _maybe_await(self.hooks.prepare_registration(request, _registration_display_name(await _json_body(request))))
+        user = session_user or await _maybe_await(
+            self.hooks.prepare_registration(
+                request, _registration_display_name(await _json_body(request))
+            )
+        )
         flow_id = self._new_flow_id()
-        response = JSONResponse(self.service.begin_registration(flow_id=flow_id, user=user))
+        response = JSONResponse(
+            self.service.begin_registration(flow_id=flow_id, user=user)
+        )
         self._set_cookie(response, self.cookies.registration_challenge, flow_id)
         return response
 
     async def register_verify(self, request: Request) -> Response:
         flow_id = self._challenge_cookie(request, self.cookies.registration_challenge)
         if not await _maybe_await(self.hooks.registration_allowed(request)):
-            raise HTTPException(status_code=403, detail="passkey registration is not allowed")
+            raise HTTPException(
+                status_code=403, detail="passkey registration is not allowed"
+            )
         try:
-            result = self.service.verify_registration(flow_id=flow_id, credential=await _json_body(request))
+            result = self.service.verify_registration(
+                flow_id=flow_id, credential=await _json_body(request)
+            )
         except AUTH_ERRORS as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         try:
             user = await _maybe_await(self.hooks.complete_registration(request, result))
         except Exception:
             logger.exception("registration completion failed")
-            raise HTTPException(status_code=500, detail="registration could not be completed")
+            raise HTTPException(
+                status_code=500, detail="registration could not be completed"
+            )
         if user is None:
-            raise HTTPException(status_code=403, detail="registered user is not allowed")
+            raise HTTPException(
+                status_code=403, detail="registered user is not allowed"
+            )
         response = JSONResponse({"ok": True})
         self._delete_cookie(response, self.cookies.registration_challenge)
         await _maybe_await(self.hooks.login(response, request, user))
         try:
-            await _maybe_await(self.hooks.after_register(request, user, result.credential))
+            await _maybe_await(
+                self.hooks.after_register(request, user, result.credential)
+            )
         except Exception:
             logger.exception("after_register observer failed")
         return response
@@ -305,11 +345,24 @@ class PasskeyAuthRouter:
         return value
 
     def _set_cookie(self, response: Response, key: str, value: str) -> None:
-        response.set_cookie(key, value, max_age=self.service.config.challenge_ttl_seconds, path=self.cookies.path, secure=self.cookies.secure, httponly=self.cookies.httponly, samesite=cast(CookieSameSite, self.cookies.samesite))
+        response.set_cookie(
+            key,
+            value,
+            max_age=self.service.config.challenge_ttl_seconds,
+            path=self.cookies.path,
+            secure=self.cookies.secure,
+            httponly=self.cookies.httponly,
+            samesite=cast(CookieSameSite, self.cookies.samesite),
+        )
 
     def _delete_cookie(self, response: Response, key: str) -> None:
-        response.delete_cookie(key, path=self.cookies.path, secure=self.cookies.secure, httponly=self.cookies.httponly, samesite=cast(CookieSameSite, self.cookies.samesite))
-
+        response.delete_cookie(
+            key,
+            path=self.cookies.path,
+            secure=self.cookies.secure,
+            httponly=self.cookies.httponly,
+            samesite=cast(CookieSameSite, self.cookies.samesite),
+        )
 
 
 async def _maybe_await(value: MaybeAwaitable[T]) -> T:
@@ -357,6 +410,7 @@ def _user_verification_env(
     if value not in {"required", "preferred", "discouraged"}:
         raise ValueError(f"{prefix}USER_VERIFICATION is invalid")
     return cast(Literal["required", "preferred", "discouraged"], value)
+
 
 def _required_env(env: Mapping[str, str], prefix: str, name: str) -> str:
     value = _env(env, prefix, name, None)

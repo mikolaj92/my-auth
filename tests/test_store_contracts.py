@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, UTC
+import threading
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from my_auth import (
+    CredentialCounterConflict,
+    MemoryCredentialStore,
     PasskeyCredential,
+    PasskeyCredentialConflict,
     PasskeyUser,
     SQLiteChallengeStore,
     SQLiteCredentialStore,
@@ -26,6 +30,86 @@ def test_memory_stores_satisfy_passkey_contracts() -> None:
 
     assert_credential_store_contract(MemoryCredentialStore)
     assert_challenge_store_contract(lambda now: MemoryChallengeStore(now=now))
+
+
+def test_memory_registration_conflict_is_atomic_under_concurrency() -> None:
+    store = MemoryCredentialStore()
+    first = VerifiedRegistration(
+        PasskeyUser("first", b"first-handle", "first"),
+        PasskeyCredential(b"shared-credential", "first", b"first-key"),
+    )
+    second = VerifiedRegistration(
+        PasskeyUser("second", b"second-handle", "second"),
+        PasskeyCredential(b"shared-credential", "second", b"second-key"),
+    )
+    barrier = threading.Barrier(2)
+    outcomes: list[str] = []
+
+    def register(result: VerifiedRegistration) -> None:
+        barrier.wait()
+        try:
+            store.save_registration(result)
+        except PasskeyCredentialConflict:
+            outcomes.append("conflict")
+        else:
+            outcomes.append("success")
+
+    threads = [
+        threading.Thread(target=register, args=(result,)) for result in (first, second)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sorted(outcomes) == ["conflict", "success"]
+    stored = store.get_credential(b"shared-credential")
+    assert stored is not None
+    winner = first if stored.user_id == first.user.user_id else second
+    loser = second if winner is first else first
+    assert store.get_user(winner.user.user_id) == winner.user
+    assert store.get_user_by_handle(winner.user.user_handle) == winner.user
+    assert store.get_user(loser.user.user_id) is None
+    assert store.get_user_by_handle(loser.user.user_handle) is None
+    assert list(store.list_credentials_for_user(winner.user.user_id)) == [
+        winner.credential
+    ]
+    assert list(store.list_credentials_for_user(loser.user.user_id)) == []
+
+
+def test_memory_compare_and_set_allows_one_winner_per_expected_counter() -> None:
+    store = MemoryCredentialStore()
+    user = PasskeyUser("user", b"handle", "user")
+    credential = PasskeyCredential(b"credential", user.user_id, b"key", sign_count=1)
+    store.save_registration(VerifiedRegistration(user, credential))
+    barrier = threading.Barrier(2)
+    outcomes: list[str] = []
+
+    def update(new_count: int) -> None:
+        barrier.wait()
+        try:
+            store.compare_and_set_credential_after_login(
+                b"credential",
+                expected_sign_count=1,
+                new_sign_count=new_count,
+                device_type=None,
+                backed_up=None,
+            )
+        except CredentialCounterConflict:
+            outcomes.append("conflict")
+        else:
+            outcomes.append("success")
+
+    threads = [threading.Thread(target=update, args=(count,)) for count in (2, 3)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sorted(outcomes) == ["conflict", "success"]
+    final = store.get_credential(b"credential")
+    assert final is not None
+    assert final.sign_count in {2, 3}
 
 
 def test_sqlite_stores_satisfy_passkey_contracts(tmp_path: Path) -> None:
@@ -144,9 +228,12 @@ def test_operation_mode_external_challenge_connection_finishes_each_mutation(
     assert not connection.in_transaction
     assert store.cleanup_expired() == 0
     with sqlite3.connect(database, timeout=0.1) as observer:
-        assert observer.execute(
-            "SELECT 1 FROM passkey_challenges WHERE key=?", ("failed-flow",)
-        ).fetchone() is None
+        assert (
+            observer.execute(
+                "SELECT 1 FROM passkey_challenges WHERE key=?", ("failed-flow",)
+            ).fetchone()
+            is None
+        )
 
     with sqlite3.connect(database) as trigger_connection:
         trigger_connection.execute("DROP TRIGGER fail_challenge_insert")
@@ -161,6 +248,7 @@ def test_external_transaction_mode_leaves_transaction_to_caller(
         ensure_sqlite_schema(setup)
 
     connection = sqlite3.connect(database)
+    connection.execute("PRAGMA foreign_keys=ON")
     connection.execute("BEGIN")
     store = SQLiteCredentialStore(connection, transaction_mode="external")
     user = PasskeyUser("caller-user", b"caller-handle", "caller")
@@ -168,9 +256,12 @@ def test_external_transaction_mode_leaves_transaction_to_caller(
     store.save_registration(VerifiedRegistration(user, credential))
     assert connection.in_transaction
     with sqlite3.connect(database) as observer:
-        assert observer.execute(
-            "SELECT 1 FROM passkey_users WHERE user_id=?", (user.user_id,)
-        ).fetchone() is None
+        assert (
+            observer.execute(
+                "SELECT 1 FROM passkey_users WHERE user_id=?", (user.user_id,)
+            ).fetchone()
+            is None
+        )
 
     connection.commit()
     assert not connection.in_transaction
@@ -178,4 +269,30 @@ def test_external_transaction_mode_leaves_transaction_to_caller(
         assert observer.execute(
             "SELECT 1 FROM passkey_users WHERE user_id=?", (user.user_id,)
         ).fetchone() == (1,)
+    connection.close()
+
+
+def test_external_mode_requires_active_caller_transaction(tmp_path: Path) -> None:
+    database = tmp_path / "external-no-transaction.sqlite3"
+    with sqlite3.connect(database) as setup:
+        ensure_sqlite_schema(setup)
+    connection = sqlite3.connect(database)
+    connection.execute("PRAGMA foreign_keys=ON")
+    with pytest.raises(RuntimeError, match="active caller transaction"):
+        SQLiteCredentialStore(connection, transaction_mode="external")
+    assert connection.in_transaction is False
+    connection.close()
+
+
+def test_external_mode_rejects_foreign_keys_disabled_before_transaction(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "external-fk-off.sqlite3"
+    with sqlite3.connect(database) as setup:
+        ensure_sqlite_schema(setup)
+    connection = sqlite3.connect(database)
+    connection.execute("BEGIN")
+    with pytest.raises(RuntimeError, match="foreign_keys=ON"):
+        SQLiteCredentialStore(connection, transaction_mode="external")
+    connection.rollback()
     connection.close()

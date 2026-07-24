@@ -154,17 +154,28 @@ app.include_router(
 routes are `GET /login`, `GET /register`, `POST /logout`, and JSON
 `POST /api/auth/{login,register}/{options,verify}`.
 
-The `fastapi-htmx` adapter wraps the same router with packaged Jinja templates
-and static JavaScript. It does not change WebAuthn verification, registration
-ordering, or transaction semantics:
+The `fastapi-htmx` adapter installs the same app-factory shell used by the host,
+wraps the existing passkey router, and owns its package static mount. It does
+not change WebAuthn verification, registration ordering, or transaction semantics:
 
 ```python
-from my_auth.fastapi_htmx import PasskeyUiConfig, create_passkey_ui_router
+from app_factory.fastapi import install_app_factory_ui
+from my_auth.fastapi_htmx import PasskeyUiConfig, install_passkey_ui
 
-ui = create_passkey_ui_router(service=passkeys, hooks=hooks, config=PasskeyUiConfig())
-app.include_router(ui.router)
-app.mount(ui.static_mount_path, ui.static_files, name="my_auth_static")
+platform = install_app_factory_ui(app, environments=[])
+install_passkey_ui(
+    app,
+    platform=platform,
+    service=passkeys,
+    hooks=hooks,
+    config=PasskeyUiConfig(),
+)
 ```
+
+The host installs the shared platform first and passes its typed `AppFactoryUi`
+value to the adapter. The installer is idempotent for the same platform and
+configuration, and rejects conflicting setup; hosts do not manually include
+the router or mount package static files.
 
 ## Ownership matrix
 
