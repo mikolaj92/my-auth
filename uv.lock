@@ -35,8 +35,8 @@ wheels = [
 
 [[package]]
 name = "app-factory"
-version = "0.4.0"
-source = { directory = "../../app-factory" }
+version = "0.4.1"
+source = { git = "https://github.com/mikolaj92/app-factory?rev=4d39f7cc069433614bf04445b7b43832594a4aa6#4d39f7cc069433614bf04445b7b43832594a4aa6" }
 dependencies = [
     { name = "jinja2" },
 ]
@@ -46,16 +46,6 @@ fastapi = [
     { name = "fastapi" },
     { name = "starlette" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.115" },
-    { name = "httpx2", marker = "extra == 'dev'", specifier = ">=0.1" },
-    { name = "jinja2", specifier = ">=3.1.6" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
-    { name = "starlette", marker = "extra == 'fastapi'", specifier = ">=0.37" },
-]
-provides-extras = ["fastapi", "dev"]
 
 [[package]]
 name = "basedpyright"
@@ -409,7 +399,7 @@ wheels = [
 
 [[package]]
 name = "my-auth"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "typing-extensions" },
@@ -439,7 +429,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "app-factory", extras = ["fastapi"], marker = "extra == 'fastapi-htmx'", directory = "../../app-factory" },
+    { name = "app-factory", extras = ["fastapi"], marker = "extra == 'fastapi-htmx'", git = "https://github.com/mikolaj92/app-factory?rev=4d39f7cc069433614bf04445b7b43832594a4aa6" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.115" },
     { name = "fastapi", marker = "extra == 'fastapi-htmx'", specifier = ">=0.115" },
     { name = "jinja2", marker = "extra == 'fastapi-htmx'", specifier = ">=3.1" },
@@ -450,7 +440,7 @@ provides-extras = ["fastapi", "fastapi-htmx"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "app-factory", extras = ["fastapi"], directory = "../../app-factory" },
+    { name = "app-factory", extras = ["fastapi"], git = "https://github.com/mikolaj92/app-factory?rev=4d39f7cc069433614bf04445b7b43832594a4aa6" },
     { name = "basedpyright", specifier = ">=1.21" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
