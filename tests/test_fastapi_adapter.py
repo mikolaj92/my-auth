@@ -422,7 +422,7 @@ def test_logout_calls_hook_deletes_adapter_cookies_and_redirects() -> None:
 
 
 def test_static_js_defaults_match_adapter_endpoints() -> None:
-    js = Path("src/my_auth/static/passkey.js").read_text()
+    js = Path("src/my_auth/fastapi_htmx/static/passkey-ui.js").read_text()
 
     assert 'optionsUrl = "/api/auth/register/options"' in js
     assert 'verifyUrl = "/api/auth/register/verify"' in js
@@ -431,7 +431,7 @@ def test_static_js_defaults_match_adapter_endpoints() -> None:
 
 
 def test_static_js_can_send_registration_display_name() -> None:
-    js = Path("src/my_auth/static/passkey.js").read_text()
+    js = Path("src/my_auth/fastapi_htmx/static/passkey-ui.js").read_text()
     register_js = js.split("export async function registerPasskey", 1)[1].split(
         "export async function loginPasskey", 1
     )[0]
@@ -439,15 +439,15 @@ def test_static_js_can_send_registration_display_name() -> None:
     assert "displayName" in register_js
     assert "display_name" in register_js
     assert "optionsBody = {}" in register_js
-    assert "postJSON(optionsUrl, registrationOptionsBody, fetchOptions)" in register_js
+    assert "postJSON(optionsUrl, body, fetchOptions)" in register_js
     assert "postJSON(optionsUrl, {}, fetchOptions)" not in register_js
+def test_static_js_parses_web_authn_options_and_serializes_credentials() -> None:
+    js = Path("src/my_auth/fastapi_htmx/static/passkey-ui.js").read_text()
 
-def test_static_js_accepts_prefetched_options_for_web_authn_activation() -> None:
-    js = Path("src/my_auth/static/passkey.js").read_text()
+    assert "parseCreationOptions(options)" in js
+    assert "parseRequestOptions(options)" in js
+    assert "serializeCredential(credential)" in js
 
-    assert "options," in js.split("export async function registerPasskey", 1)[1]
-    assert "const registrationOptions = options ?? await postJSON(" in js
-    assert "const loginOptions = options ?? await postJSON(" in js
 
 
 def test_core_import_does_not_import_fastapi_adapter() -> None:

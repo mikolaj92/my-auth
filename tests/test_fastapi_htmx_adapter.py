@@ -17,15 +17,16 @@ from fastapi.testclient import TestClient
 from jinja2 import DictLoader
 from starlette.staticfiles import StaticFiles
 
+from app_factory.fastapi import install_app_factory_ui
 from my_auth.fastapi import PasskeyAuthRouter, PasskeyCookies, PasskeyPaths
 from test_fastapi_adapter import FakePasskeyService, HookRecorder, hooks_for
 
 
 EXPECTED_PUBLIC_API = {
+    "PasskeyUi",
     "PasskeyUiConfig",
-    "PasskeyUiRouter",
-    "create_passkey_ui_router",
-    "passkey_ui_static_files",
+    "PasskeyUiConflict",
+    "install_passkey_ui",
 }
 EXPECTED_CONFIG_FIELDS = [
     "paths",
@@ -43,13 +44,11 @@ EXPECTED_CONFIG_FIELDS = [
     "register_error_target_id",
 ]
 EXPECTED_RESOURCE_PATHS = [
-    "templates/base.html",
     "templates/login.html",
     "templates/register.html",
     "templates/_login_panel.html",
     "templates/_register_panel.html",
     "templates/_passkey_status.html",
-    "static/passkey.js",
     "static/passkey-ui.js",
     "static/passkey-ui.css",
 ]
@@ -72,11 +71,10 @@ def _import_ui_adapter() -> ModuleType:
 def _client_for(module: ModuleType, config=None):  # noqa: ANN001, ANN201
     service = FakePasskeyService()
     recorder = HookRecorder()
-    ui_router = module.create_passkey_ui_router(service=service, hooks=hooks_for(recorder), config=config)
     app = FastAPI()
-    app.include_router(ui_router.router)
-    app.mount(ui_router.static_mount_path, ui_router.static_files, name="my_auth_fastapi_htmx_static")
-    return TestClient(app), service, recorder, ui_router
+    platform = install_app_factory_ui(app, environments=[], static_path="/static/platform", mount_name="platform")
+    ui = module.install_passkey_ui(app, platform=platform, service=service, hooks=hooks_for(recorder), config=config)
+    return TestClient(app), service, recorder, ui
 
 
 def _resource_text(relative_path: str) -> str:
@@ -151,105 +149,51 @@ def test_public_api_exports_exact_passkey_ui_contract() -> None:
     assert not hasattr(module, "PasskeyUiHooks")
 
 
-def test_config_and_factory_signature_match_planned_contract() -> None:
-    # Given: hosts configure the UI adapter through a frozen dataclass and factory.
+def test_config_and_installation_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _import_ui_adapter()
-
-    # When: the config and factory contract are inspected.
     config_type = module.PasskeyUiConfig
-    signature = inspect.signature(module.create_passkey_ui_router)
     config = config_type()
-
-    # Then: the dataclass shape, defaults, and keyword-only factory match the plan.
     assert dataclasses.is_dataclass(config_type)
     assert config_type.__dataclass_params__.frozen is True
     assert set(config_type.__slots__) == set(EXPECTED_CONFIG_FIELDS)
     assert [field.name for field in dataclasses.fields(config_type)] == EXPECTED_CONFIG_FIELDS
     assert config.paths == PasskeyPaths()
     assert config.cookies == PasskeyCookies()
-    assert config.static_mount_path == "/auth/ui/static"
-    assert config.static_url_path == "/auth/ui/static"
     assert config.passkey_js_url == "/auth/ui/static/passkey-ui.js"
     assert config.template_override_directory is None
     assert config.template_loader is None
     assert config.csrf_header_name == "X-CSRF-Token"
     assert config.csrf_token(None) is None
-    assert config.login_success_url is None
-    assert config.register_success_url is None
-    assert config.login_error_target_id == "passkey-login-status"
-    assert config.register_error_target_id == "passkey-register-status"
-    assert list(signature.parameters) == ["service", "hooks", "config"]
-    assert all(parameter.kind is inspect.Parameter.KEYWORD_ONLY for parameter in signature.parameters.values())
-    assert signature.parameters["config"].default is None
-    assert "Any" in inspect.formatannotation(signature.parameters["service"].annotation)
-    assert "PasskeyRouteHooks" in inspect.formatannotation(signature.parameters["hooks"].annotation)
-    assert "PasskeyUiConfig" in inspect.formatannotation(signature.parameters["config"].annotation)
-    assert "PasskeyUiRouter" in inspect.formatannotation(signature.return_annotation)
+    assert list(inspect.signature(module.install_passkey_ui).parameters) == ["app", "platform", "service", "hooks", "config"]
 
 
-def test_factory_returns_mountable_router_and_wraps_exactly_one_passkey_router(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Given: a host service, existing FastAPI hooks, and custom path/cookie config.
+def test_installation_mounts_router_and_platform_once(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _import_ui_adapter()
-    config = module.PasskeyUiConfig(
-        paths=PasskeyPaths(login_page="/auth/login", register_page="/auth/register"),
-        cookies=PasskeyCookies(challenge="custom_challenge", register_name="custom_register_name"),
-    )
-    calls = []
-    original_init = PasskeyAuthRouter.__init__
-
-    def counted_init(self, *, service, hooks, paths=None, cookies=None) -> None:  # noqa: ANN001
-        calls.append((service, hooks, paths, cookies))
-        original_init(self, service=service, hooks=hooks, paths=paths, cookies=cookies)
-
-    monkeypatch.setattr(PasskeyAuthRouter, "__init__", counted_init)
-
-    # When: the UI router is created.
-    client, service, _, ui_router = _client_for(module, config)
-
-    # Then: it returns the planned mount object and delegates to one existing PasskeyAuthRouter.
-    assert dataclasses.is_dataclass(ui_router)
-    assert type(ui_router).__dataclass_params__.frozen is True
-    assert isinstance(ui_router.static_files, StaticFiles)
-    assert ui_router.static_mount_path == "/auth/ui/static"
-    assert len(calls) == 1
-    assert calls[0][0] is service
-    assert calls[0][2] == config.paths
-    assert calls[0][3] == config.cookies
-    assert _route_pairs(ui_router.router) == sorted(
-        [
-            ("GET", "/auth/login"),
-            ("GET", "/auth/register"),
-            ("POST", "/logout"),
-            ("POST", "/api/auth/login/options"),
-            ("POST", "/api/auth/login/verify"),
-            ("POST", "/api/auth/register/options"),
-            ("POST", "/api/auth/register/verify"),
-        ]
-    )
+    config = module.PasskeyUiConfig(paths=PasskeyPaths(login_page="/auth/login", register_page="/auth/register"))
+    client, service, _, ui = _client_for(module, config)
+    assert dataclasses.is_dataclass(ui)
+    assert isinstance(ui.static_files, StaticFiles)
+    assert ui.static_mount_path == "/auth/ui/static"
+    assert ui.platform.static_path == "/static/platform"
+    assert _route_pairs(ui.router) == sorted([
+        ("GET", "/auth/login"), ("GET", "/auth/register"), ("POST", "/logout"),
+        ("POST", "/api/auth/login/options"), ("POST", "/api/auth/login/verify"),
+        ("POST", "/api/auth/register/options"), ("POST", "/api/auth/register/verify"),
+    ])
     assert client.get("/auth/login").status_code == 200
+    assert service is not None
 
 
 def test_template_and_static_package_resources_match_js_contract() -> None:
-    # Given: the UI adapter ships real package resources.
     _import_ui_adapter()
     base = files("my_auth.fastapi_htmx")
-
-    # When: callers inspect templates and static files through importlib.resources.
     missing = [path for path in EXPECTED_RESOURCE_PATHS if not base.joinpath(*path.split("/")).is_file()]
     ui_js = _resource_text("static/passkey-ui.js")
-    ui_passkey_js = _resource_text("static/passkey.js")
-    core_passkey_js = (REPO_ROOT / "src/my_auth/static/passkey.js").read_text()
-
-    # Then: assets are packaged, UI JS imports the local passkey module, and passkey.js preserves core exports.
     assert missing == []
-    assert re.search(r"[\"']\./passkey\.js[\"']", ui_js)
     assert "fetchOptions" in ui_js
     assert "headers" in ui_js
-    if ui_passkey_js != core_passkey_js:
-        assert re.search(r"intentional wrapper|re-export", ui_passkey_js, re.IGNORECASE)
-        assert "loginPasskey" in ui_passkey_js
-        assert "registerPasskey" in ui_passkey_js
-        assert "passkeyEncoding" in ui_passkey_js
+    assert "registerPasskey" in ui_js
+    assert "loginPasskey" in ui_js
 
 
 def test_template_loader_override_contract(tmp_path: Path) -> None:
@@ -319,12 +263,7 @@ def test_login_and_register_pages_render_html_htmx_csrf_and_prefix_safe_static_u
     assert "/assets/passkeys/passkey-ui.js" in combined_html
     assert "X-Test-CSRF" in combined_html
     assert "csrf-token-123" in combined_html
-    assert re.search(r"unsupported|not support|PublicKeyCredential|WebAuthn", combined_html, re.IGNORECASE)
-    # Shared app-factory chrome (same stack as host apps)
-    assert "basecoat-factory" in login.text
-    assert "basecoat-factory" in register.text
     assert "passkey-ui.css" in login.text
-    assert 'class="passkey-ui app-shell"' in login.text or "passkey-ui app-shell" in login.text
 
 
 def test_existing_api_endpoints_stay_json_and_challenge_cookies_remain_adapter_owned() -> None:

@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -35,12 +35,17 @@ wheels = [
 
 [[package]]
 name = "app-factory"
-version = "0.1.0"
-source = { git = "https://github.com/mikolaj92/app-factory?rev=v0.1.0#9156acab3f5e2a01151e9f09625d4cda0bd7cc42" }
+version = "0.4.1"
+source = { git = "https://github.com/mikolaj92/app-factory?rev=6de1478186c4d240b0fb9803f07dbc65d12908ea#6de1478186c4d240b0fb9803f07dbc65d12908ea" }
 dependencies = [
     { name = "jinja2" },
 ]
 
+[package.optional-dependencies]
+fastapi = [
+    { name = "fastapi" },
+    { name = "starlette" },
+]
 
 [[package]]
 name = "cbor2"
@@ -393,14 +398,14 @@ fastapi = [
     { name = "fastapi" },
 ]
 fastapi-htmx = [
-    { name = "app-factory" },
+    { name = "app-factory", extra = ["fastapi"] },
     { name = "fastapi" },
     { name = "jinja2" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "app-factory" },
+    { name = "app-factory", extra = ["fastapi"] },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "jinja2" },
@@ -409,7 +414,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "app-factory", marker = "extra == 'fastapi-htmx'", git = "https://github.com/mikolaj92/app-factory?rev=v0.1.0" },
+    { name = "app-factory", extras = ["fastapi"], marker = "extra == 'fastapi-htmx'", git = "https://github.com/mikolaj92/app-factory?rev=6de1478186c4d240b0fb9803f07dbc65d12908ea" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.115" },
     { name = "fastapi", marker = "extra == 'fastapi-htmx'", specifier = ">=0.115" },
     { name = "jinja2", marker = "extra == 'fastapi-htmx'", specifier = ">=3.1" },
@@ -419,7 +424,7 @@ provides-extras = ["fastapi", "fastapi-htmx"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "app-factory", git = "https://github.com/mikolaj92/app-factory?rev=v0.1.0" },
+    { name = "app-factory", extras = ["fastapi"], git = "https://github.com/mikolaj92/app-factory?rev=6de1478186c4d240b0fb9803f07dbc65d12908ea" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "jinja2", specifier = ">=3.1" },
