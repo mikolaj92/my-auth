@@ -41,6 +41,7 @@ dependencies = [
     { name = "jinja2" },
 ]
 
+
 [[package]]
 name = "cbor2"
 version = "5.9.0"

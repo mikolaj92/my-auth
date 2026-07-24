@@ -261,6 +261,20 @@ _CREDENTIAL_COLUMNS = (
 _CHALLENGE_COLUMNS = "challenge, kind, key, expires_at, user_id, user_handle, user_name, user_display_name"
 
 
+class ChallengeStore(Protocol):
+    def save(
+        self,
+        *,
+        key: str,
+        kind: ChallengeKind,
+        challenge: bytes,
+        ttl_seconds: int,
+        user: PasskeyUser | None = None,
+    ) -> ChallengeRecord: ...
+
+    def pop(self, *, key: str, kind: ChallengeKind) -> ChallengeRecord: ...
+
+
 class MemoryChallengeStore:
     def __init__(self, *, now: Any | None = None) -> None:
         self._records: dict[tuple[str, ChallengeKind], ChallengeRecord] = {}

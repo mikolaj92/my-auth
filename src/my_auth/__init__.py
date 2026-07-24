@@ -1,8 +1,10 @@
+from .challenges import SQLiteChallengeStore
+from .credentials import SQLiteCredentialStore
 from .passkeys import (
     AuthenticationResult,
+    ChallengeStore,
     ChallengeNotFound,
     ChallengeRecord,
-    ChallengeStore,
     CredentialNotFound,
     CredentialStore,
     MemoryChallengeStore,
@@ -22,9 +24,9 @@ from .testing import assert_challenge_store_contract, assert_credential_store_co
 
 __all__ = [
     "AuthenticationResult",
+    "ChallengeStore",
     "ChallengeNotFound",
     "ChallengeRecord",
-    "ChallengeStore",
     "CredentialNotFound",
     "CredentialStore",
     "MemoryChallengeStore",

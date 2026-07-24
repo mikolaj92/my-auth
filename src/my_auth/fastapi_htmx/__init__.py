@@ -1,10 +1,9 @@
 from .config import PasskeyUiConfig
-from .router import PasskeyUiRouter, create_passkey_ui_router
-from .static import passkey_ui_static_files
+from .router import PasskeyUi, PasskeyUiConflict, install_passkey_ui
 
 __all__ = (
+    "PasskeyUi",
     "PasskeyUiConfig",
-    "PasskeyUiRouter",
-    "create_passkey_ui_router",
-    "passkey_ui_static_files",
+    "PasskeyUiConflict",
+    "install_passkey_ui",
 )

@@ -1,7 +1,15 @@
-{% extends "base.html" %}
+{% extends "app_factory/shell.html" %}
 
 {% block title %}Register a passkey{% endblock %}
 
-{% block content %}
+{% block head_extra %}
+  <link rel="stylesheet" href="{{ passkey_css_url }}">
+{% endblock %}
+
+{% block main %}
   {% include "_register_panel.html" %}
+{% endblock %}
+
+{% block body_end %}
+  <script type="module" src="{{ passkey_js_url }}"></script>
 {% endblock %}
