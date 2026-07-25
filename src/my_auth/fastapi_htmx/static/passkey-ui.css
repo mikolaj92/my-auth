@@ -20,6 +20,7 @@
 
 .passkey-card {
   width: min(100%, var(--passkey-card-width, 28rem));
+  margin-inline: auto;
 }
 
 /* Basecoat .card pad/gap; keep form stacks tight */

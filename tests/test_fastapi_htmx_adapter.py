@@ -264,6 +264,10 @@ def test_login_and_register_pages_render_html_htmx_csrf_and_prefix_safe_static_u
     assert "X-Test-CSRF" in combined_html
     assert "csrf-token-123" in combined_html
     assert "passkey-ui.css" in login.text
+    assert re.search(r"unsupported|not support|PublicKeyCredential|WebAuthn", combined_html, re.IGNORECASE)
+    css = client.get("/assets/passkeys/passkey-ui.css")
+    assert css.status_code == 200
+    assert re.search(r"\.passkey-card\s*\{[^}]*margin-inline:\s*auto", css.text, re.DOTALL)
 
 
 def test_existing_api_endpoints_stay_json_and_challenge_cookies_remain_adapter_owned() -> None:
