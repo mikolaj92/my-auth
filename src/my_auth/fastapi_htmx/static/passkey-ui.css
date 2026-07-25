@@ -10,7 +10,8 @@
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 
-.passkey-shell {
+.passkey-shell,
+.passkey-ui .app-main {
   box-sizing: border-box;
   display: grid;
   min-height: 100dvh;
