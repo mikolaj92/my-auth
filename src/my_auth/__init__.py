@@ -1,10 +1,9 @@
-from .challenges import SQLiteChallengeStore
-from .credentials import SQLiteCredentialStore
 from .passkeys import (
     AuthenticationResult,
-    ChallengeStore,
     ChallengeNotFound,
     ChallengeRecord,
+    ChallengeStore,
+    CredentialCounterConflict,
     CredentialNotFound,
     CredentialStore,
     MemoryChallengeStore,
@@ -13,20 +12,33 @@ from .passkeys import (
     PASSKEY_SQLITE_SCHEMA,
     PasskeyConfig,
     PasskeyCredential,
+    PasskeyCredentialConflict,
     PasskeyService,
     PasskeyUser,
+    PasskeyUserConflict,
     SQLiteChallengeStore,
     SQLiteCredentialStore,
     UserHandleMismatch,
+    VerifiedRegistration,
 )
-from .sqlite_schema import ensure_sqlite_schema, sqlite_schema_sql
+from .sqlite_schema import (
+    CURRENT_SCHEMA_VERSION,
+    SQLiteSchemaError,
+    SQLiteSchemaInspection,
+    UnsupportedSQLiteSchema,
+    ensure_sqlite_schema,
+    inspect_sqlite_schema,
+    migrate_sqlite_schema,
+    sqlite_schema_sql,
+)
 from .testing import assert_challenge_store_contract, assert_credential_store_contract
 
 __all__ = [
     "AuthenticationResult",
-    "ChallengeStore",
     "ChallengeNotFound",
     "ChallengeRecord",
+    "ChallengeStore",
+    "CredentialCounterConflict",
     "CredentialNotFound",
     "CredentialStore",
     "MemoryChallengeStore",
@@ -35,13 +47,22 @@ __all__ = [
     "PASSKEY_SQLITE_SCHEMA",
     "PasskeyConfig",
     "PasskeyCredential",
+    "PasskeyCredentialConflict",
     "PasskeyService",
     "PasskeyUser",
+    "PasskeyUserConflict",
     "SQLiteChallengeStore",
     "SQLiteCredentialStore",
     "UserHandleMismatch",
+    "VerifiedRegistration",
+    "CURRENT_SCHEMA_VERSION",
+    "SQLiteSchemaError",
+    "SQLiteSchemaInspection",
+    "UnsupportedSQLiteSchema",
+    "ensure_sqlite_schema",
+    "inspect_sqlite_schema",
+    "migrate_sqlite_schema",
     "assert_challenge_store_contract",
     "assert_credential_store_contract",
-    "ensure_sqlite_schema",
     "sqlite_schema_sql",
 ]

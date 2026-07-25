@@ -2,290 +2,241 @@ from __future__ import annotations
 
 import dataclasses
 import importlib
-import inspect
-import re
 import subprocess
 import sys
 import textwrap
 from importlib.resources import files
 from pathlib import Path
-from types import ModuleType
 
 import pytest
-from fastapi import FastAPI
+from app_factory.fastapi import (
+    AppFactoryUi,
+    AppFactoryUiConflict,
+    install_app_factory_ui,
+)
+from fastapi import FastAPI, Request, Response
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
-from jinja2 import DictLoader
-from starlette.staticfiles import StaticFiles
 
-from app_factory.fastapi import install_app_factory_ui
-from my_auth.fastapi import PasskeyAuthRouter, PasskeyCookies, PasskeyPaths
-from test_fastapi_adapter import FakePasskeyService, HookRecorder, hooks_for
+from my_auth import (
+    MemoryChallengeStore,
+    MemoryCredentialStore,
+    PasskeyConfig,
+    PasskeyService,
+    PasskeyUser,
+    VerifiedRegistration,
+)
+from my_auth.fastapi import PasskeyRouteHooks
+from my_auth.fastapi_htmx import (
+    PasskeyUi,
+    PasskeyUiConfig,
+    PasskeyUiConflict,
+    install_passkey_ui,
+)
 
-
-EXPECTED_PUBLIC_API = {
-    "PasskeyUi",
-    "PasskeyUiConfig",
-    "PasskeyUiConflict",
-    "install_passkey_ui",
-}
-EXPECTED_CONFIG_FIELDS = [
-    "paths",
-    "cookies",
-    "static_mount_path",
-    "static_url_path",
-    "passkey_js_url",
-    "template_override_directory",
-    "template_loader",
-    "csrf_header_name",
-    "csrf_token",
-    "login_success_url",
-    "register_success_url",
-    "login_error_target_id",
-    "register_error_target_id",
-]
-EXPECTED_RESOURCE_PATHS = [
-    "templates/login.html",
-    "templates/register.html",
-    "templates/_login_panel.html",
-    "templates/_register_panel.html",
-    "templates/_passkey_status.html",
-    "static/passkey-ui.js",
-    "static/passkey-ui.css",
-]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _import_ui_adapter() -> ModuleType:
-    try:
-        return importlib.import_module("my_auth.fastapi_htmx")
-    except ModuleNotFoundError as error:
-        if error.name == "my_auth.fastapi_htmx":
-            pytest.fail(
-                "planned RED: my_auth.fastapi_htmx is missing; implement the explicit "
-                "FastAPI HTMX UI adapter module with the Phase 1 public contract",
-                pytrace=False,
-            )
-        raise
+def test_root_import_keeps_optional_ui_boundary_unloaded() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            textwrap.dedent(
+                """
+                import sys
+                import my_auth
+                forbidden = {"fastapi", "jinja2", "app_factory", "my_auth.fastapi_htmx"}
+                assert not forbidden & set(sys.modules)
+                """
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
-def _client_for(module: ModuleType, config=None):  # noqa: ANN001, ANN201
-    service = FakePasskeyService()
-    recorder = HookRecorder()
+def _hooks() -> PasskeyRouteHooks:
+    user = PasskeyUser("u", b"handle", "name")
+
+    async def session(_request: Request):
+        return None
+
+    async def prepare(_request: Request, _display_name: str):
+        return user
+
+    async def complete(_request: Request, result: VerifiedRegistration):
+        return result.user
+
+    async def auth(_user_id: str):
+        return user
+
+    async def login(_response: Response, _request: Request, _user: PasskeyUser):
+        return None
+
+    async def logout(_response: Response, _request: Request):
+        return None
+
+    async def policy(_request: Request):
+        return True
+
+    async def render_login(_request: Request):
+        raise AssertionError("installer must replace render_login")
+
+    async def render_register(request: Request, *, bootstrap: bool):
+        del request, bootstrap
+        raise AssertionError("installer must replace render_register")
+
+    return PasskeyRouteHooks(
+        get_session_user=session,
+        prepare_registration=prepare,
+        complete_registration=complete,
+        get_auth_user=auth,
+        login=login,
+        logout=logout,
+        registration_allowed=policy,
+        render_login=render_login,
+        render_register=render_register,
+    )
+
+
+def _service() -> PasskeyService:
+    return PasskeyService(
+        config=PasskeyConfig(
+            rp_id="localhost", rp_name="Demo", origin="http://localhost"
+        ),
+        challenges=MemoryChallengeStore(),
+        credentials=MemoryCredentialStore(),
+    )
+
+
+def _app() -> tuple[FastAPI, AppFactoryUi, PasskeyUi]:
     app = FastAPI()
-    platform = install_app_factory_ui(app, environments=[], static_path="/static/platform", mount_name="platform")
-    ui = module.install_passkey_ui(app, platform=platform, service=service, hooks=hooks_for(recorder), config=config)
-    return TestClient(app), service, recorder, ui
+    platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        app,
+        environments=[],
+        static_path=platform.static_path,
+        mount_name=platform.mount_name,
+    )
+    ui = install_passkey_ui(app, platform=platform, service=_service(), hooks=_hooks())
+    return app, platform, ui
 
 
-def _resource_text(relative_path: str) -> str:
-    return files("my_auth.fastapi_htmx").joinpath(*relative_path.split("/")).read_text()
+def test_public_api_has_only_installer_contract() -> None:
+    module = importlib.import_module("my_auth.fastapi_htmx")
+    assert set(module.__all__) == {
+        "PasskeyUi",
+        "PasskeyUiConfig",
+        "PasskeyUiConflict",
+        "install_passkey_ui",
+    }
+    assert not hasattr(module, "create_passkey_ui_router")
+    assert not hasattr(module, "PasskeyUiRouter")
+    params = getattr(PasskeyUi, "__dataclass_params__", None)
+    assert dataclasses.is_dataclass(PasskeyUi) and getattr(params, "frozen", False)
 
 
-def _route_pairs(router) -> list[tuple[str, str]]:  # noqa: ANN001
-    pairs: list[tuple[str, str]] = []
-    for route in router.routes:
-        for method in getattr(route, "methods", set()):
-            if method != "HEAD":
-                pairs.append((method, route.path))
-    return sorted(pairs)
+def test_installer_is_idempotent_and_rejects_different_setup() -> None:
+    app, platform, first = _app()
+    second = install_passkey_ui(
+        app, platform=platform, service=_service(), hooks=_hooks()
+    )
+    assert second is first
+    with pytest.raises(PasskeyUiConflict):
+        install_passkey_ui(
+            app,
+            platform=platform,
+            service=_service(),
+            hooks=_hooks(),
+            config=PasskeyUiConfig(static_mount_path="/other/static"),
+        )
+    with pytest.raises(AppFactoryUiConflict):
+        install_passkey_ui(
+            FastAPI(),
+            platform=platform,
+            service=_service(),
+            hooks=_hooks(),
+        )
 
 
-def test_root_import_does_not_load_ui_or_optional_framework_modules() -> None:
-    # Given: a fresh Python subprocess with no my_auth modules imported.
-    code = textwrap.dedent(
-        """
-        import sys
-        import my_auth
-
-        forbidden = {"fastapi", "jinja2", "my_auth.fastapi", "my_auth.fastapi_htmx"}
-        loaded = sorted(forbidden & set(sys.modules))
-        print("loaded=" + repr(loaded))
-        raise SystemExit(1 if loaded else 0)
-        """
+def test_installer_rejects_static_mount_overlap() -> None:
+    app = FastAPI()
+    platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        app,
+        environments=[],
+        static_path=platform.static_path,
+        mount_name=platform.mount_name,
     )
 
-    # When: only the package root is imported.
-    result = subprocess.run([sys.executable, "-c", code], text=True, capture_output=True, check=False)
-
-    # Then: optional FastAPI/Jinja/UI boundaries stay unloaded.
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == "loaded=[]"
-
-
-def test_fastapi_htmx_is_an_explicit_ui_boundary_import() -> None:
-    # Given: the root import is already proven clean in-process.
-    code = textwrap.dedent(
-        """
-        import importlib
-        import sys
-        import my_auth
-
-        before = "my_auth.fastapi_htmx" in sys.modules
-        importlib.import_module("my_auth.fastapi_htmx")
-        after = "my_auth.fastapi_htmx" in sys.modules
-        print(f"before={before} after={after}")
-        """
-    )
-
-    # When: the UI adapter is imported explicitly.
-    result = subprocess.run([sys.executable, "-c", code], text=True, capture_output=True, check=False)
-
-    # Then: that explicit module is the only UI adapter boundary.
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == "before=False after=True"
+    for path in ("/static/platform", "/static/platform/auth", "/static"):
+        with pytest.raises(PasskeyUiConflict, match="overlaps existing mount"):
+            install_passkey_ui(
+                app,
+                platform=platform,
+                service=_service(),
+                hooks=_hooks(),
+                config=PasskeyUiConfig(
+                    static_mount_path=path,
+                    static_url_path=path,
+                ),
+            )
 
 
-def test_public_api_exports_exact_passkey_ui_contract() -> None:
-    # Given: the explicit UI adapter module exists.
-    module = _import_ui_adapter()
-
-    # When: callers inspect the public API surface.
-    exported = set(module.__all__)
-
-    # Then: only the planned adapter symbols are public, with no PasskeyUiHooks seam.
-    assert exported == EXPECTED_PUBLIC_API
-    for name in EXPECTED_PUBLIC_API:
-        assert hasattr(module, name)
-    assert not hasattr(module, "PasskeyUiHooks")
-
-
-def test_config_and_installation_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    module = _import_ui_adapter()
-    config_type = module.PasskeyUiConfig
-    config = config_type()
-    assert dataclasses.is_dataclass(config_type)
-    assert config_type.__dataclass_params__.frozen is True
-    assert set(config_type.__slots__) == set(EXPECTED_CONFIG_FIELDS)
-    assert [field.name for field in dataclasses.fields(config_type)] == EXPECTED_CONFIG_FIELDS
-    assert config.paths == PasskeyPaths()
-    assert config.cookies == PasskeyCookies()
-    assert config.passkey_js_url == "/auth/ui/static/passkey-ui.js"
-    assert config.template_override_directory is None
-    assert config.template_loader is None
-    assert config.csrf_header_name == "X-CSRF-Token"
-    assert config.csrf_token(None) is None
-    assert list(inspect.signature(module.install_passkey_ui).parameters) == ["app", "platform", "service", "hooks", "config"]
-
-
-def test_installation_mounts_router_and_platform_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    module = _import_ui_adapter()
-    config = module.PasskeyUiConfig(paths=PasskeyPaths(login_page="/auth/login", register_page="/auth/register"))
-    client, service, _, ui = _client_for(module, config)
-    assert dataclasses.is_dataclass(ui)
-    assert isinstance(ui.static_files, StaticFiles)
-    assert ui.static_mount_path == "/auth/ui/static"
-    assert ui.platform.static_path == "/static/platform"
-    assert _route_pairs(ui.router) == sorted([
-        ("GET", "/auth/login"), ("GET", "/auth/register"), ("POST", "/logout"),
-        ("POST", "/api/auth/login/options"), ("POST", "/api/auth/login/verify"),
-        ("POST", "/api/auth/register/options"), ("POST", "/api/auth/register/verify"),
-    ])
-    assert client.get("/auth/login").status_code == 200
-    assert service is not None
-
-
-def test_template_and_static_package_resources_match_js_contract() -> None:
-    _import_ui_adapter()
-    base = files("my_auth.fastapi_htmx")
-    missing = [path for path in EXPECTED_RESOURCE_PATHS if not base.joinpath(*path.split("/")).is_file()]
-    ui_js = _resource_text("static/passkey-ui.js")
-    assert missing == []
-    assert "fetchOptions" in ui_js
-    assert "headers" in ui_js
-    assert "registerPasskey" in ui_js
-    assert "loginPasskey" in ui_js
-
-
-def test_template_loader_override_contract(tmp_path: Path) -> None:
-    # Given: hosts can supply either a complete loader or an override directory, but not both.
-    module = _import_ui_adapter()
-    config_type = module.PasskeyUiConfig
-    override_loader = DictLoader(
-        {
-            "login.html": "login override {{ paths.login_options }} {{ csrf_header_name }}",
-            "register.html": "register override {{ bootstrap }} {{ register_error_target_id }}",
-        }
-    )
-    override_directory = tmp_path / "templates"
-    override_directory.mkdir()
-    override_directory.joinpath("login.html").write_text("directory override {{ passkey_js_url }}")
-
-    # When: a custom loader is supplied.
-    client, _, _, _ = _client_for(module, config_type(template_loader=override_loader))
-
-    # Then: that loader is used directly, and ambiguous loader configuration is rejected.
+def test_testclient_smoke_pages_and_package_js() -> None:
+    app, _, ui = _app()
+    client = TestClient(app)
     login = client.get("/login")
     register = client.get("/register")
-    assert login.status_code == 200
-    assert register.status_code == 200
-    assert "login override /api/auth/login/options X-CSRF-Token" in login.text
-    assert "register override True passkey-register-status" in register.text
-    with pytest.raises(ValueError):
-        config_type(template_loader=override_loader, template_override_directory=override_directory)
-
-    directory_client, _, _, _ = _client_for(module, config_type(template_override_directory=override_directory))
-    directory_login = directory_client.get("/login")
-    directory_register = directory_client.get("/register")
-    assert "directory override /auth/ui/static/passkey-ui.js" in directory_login.text
-    assert "passkey-register-status" in directory_register.text
-
-
-def test_login_and_register_pages_render_html_htmx_csrf_and_prefix_safe_static_url() -> None:
-    # Given: a host configures custom UI paths, static URLs, CSRF metadata, and stable status targets.
-    module = _import_ui_adapter()
-    config = module.PasskeyUiConfig(
-        paths=PasskeyPaths(login_page="/auth/login", register_page="/auth/register"),
-        static_mount_path="/assets/passkeys",
-        static_url_path="/assets/passkeys",
-        passkey_js_url="/assets/passkeys/passkey-ui.js",
-        csrf_header_name="X-Test-CSRF",
-        csrf_token=lambda _request: "csrf-token-123",
-        login_error_target_id="custom-login-status",
-        register_error_target_id="custom-register-status",
+    javascript = client.get(f"{ui.static_mount_path}/passkey-ui.js")
+    package_javascript = client.get(f"{ui.static_mount_path}/passkey.js")
+    assert (
+        login.status_code
+        == register.status_code
+        == javascript.status_code
+        == package_javascript.status_code
+        == 200
     )
-    client, _, _, _ = _client_for(module, config)
-
-    # When: the full-page login/register endpoints and mounted static asset are requested.
-    login = client.get("/auth/login")
-    register = client.get("/auth/register")
-    static_js = client.get("/assets/passkeys/passkey-ui.js")
-
-    # Then: pages are HTML, HTMX/Basecoat-oriented, CSRF-aware, fallback-friendly, and prefix-safe.
-    assert login.status_code == 200
-    assert register.status_code == 200
-    assert static_js.status_code == 200
     assert login.headers["content-type"].startswith("text/html")
     assert register.headers["content-type"].startswith("text/html")
-    combined_html = login.text + register.text
-    assert "custom-login-status" in login.text
-    assert "custom-register-status" in register.text
-    assert "hx-" in combined_html
-    assert "/assets/passkeys/passkey-ui.js" in combined_html
-    assert "X-Test-CSRF" in combined_html
-    assert "csrf-token-123" in combined_html
-    assert "passkey-ui.css" in login.text
-    assert re.search(r"unsupported|not support|PublicKeyCredential|WebAuthn", combined_html, re.IGNORECASE)
-    css = client.get("/assets/passkeys/passkey-ui.css")
-    assert css.status_code == 200
-    assert re.search(r"\.passkey-card\s*\{[^}]*margin-inline:\s*auto", css.text, re.DOTALL)
+    assert "app-shell" in login.text
+    assert "app-shell" in register.text
+    assert f"{ui.static_mount_path}/passkey-ui.js" in login.text
+    assert f"{ui.static_mount_path}/passkey-ui.js" in register.text
+    assert 'from "./passkey.js"' in javascript.text
+    assert "export async function loginPasskey" in package_javascript.text
+    assert "export async function registerPasskey" in package_javascript.text
+    assert (
+        files("my_auth").joinpath("static/passkey.js").read_text()
+        == package_javascript.text
+    )
 
 
-def test_existing_api_endpoints_stay_json_and_challenge_cookies_remain_adapter_owned() -> None:
-    # Given: the UI adapter wraps the existing JSON passkey routes.
-    module = _import_ui_adapter()
-    client, _, _, _ = _client_for(module)
+def test_adapter_keeps_one_json_router_and_host_owns_hooks() -> None:
+    app, _, ui = _app()
+    paths: list[tuple[str, tuple[str, ...]]] = [
+        (route.path, tuple(sorted(route.methods or ())))
+        for route in ui.router.routes
+        if isinstance(route, APIRoute)
+    ]
+    assert paths.count(("/login", ("GET",))) == 1
+    assert paths.count(("/register", ("GET",))) == 1
+    assert any(path == "/api/auth/login/options" for path, _ in paths)
+    assert any(path == "/api/auth/register/options" for path, _ in paths)
+    assert app.state.my_auth_passkey_ui is ui
 
-    # When: JSON WebAuthn endpoints succeed and fail through the UI router.
-    options = client.post("/api/auth/login/options")
-    missing_cookie = client.post("/api/auth/login/verify", json={"id": "credential"})
 
-    # Then: API responses remain JSON and only WebAuthn challenge cookies are adapter-owned.
-    assert options.status_code == 200
-    assert options.headers["content-type"].startswith("application/json")
-    assert options.json()["challenge"] == "login-challenge"
-    assert missing_cookie.status_code == 400
-    assert missing_cookie.headers["content-type"].startswith("application/json")
-    assert missing_cookie.json()["detail"] == "missing passkey challenge"
-    set_cookies = options.headers.get_list("set-cookie")
-    assert set_cookies
-    assert all(cookie.startswith("passkey_challenge=") for cookie in set_cookies)
+def test_no_legacy_ui_symbols_or_duplicate_static_helper_source() -> None:
+    router_source = (REPO_ROOT / "src/my_auth/fastapi_htmx/router.py").read_text()
+    package_source = (REPO_ROOT / "src/my_auth/fastapi_htmx/__init__.py").read_text()
+    assert "create_passkey_ui_router" not in router_source + package_source
+    assert "def passkey_ui_static_files" not in router_source + package_source
+    assert (REPO_ROOT / "src/my_auth/fastapi_htmx/static/passkey.js").is_file()

@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import APIRouter, FastAPI
 from starlette.staticfiles import StaticFiles
 
-from app_factory.fastapi import AppFactoryUi, AppFactoryUiConflict, install_app_factory_ui
+from app_factory.fastapi import (
+    AppFactoryUi,
+    AppFactoryUiConflict,
+    install_app_factory_ui,
+)
 from my_auth.fastapi import PasskeyAuthRouter, PasskeyRouteHooks
 
 from .config import PasskeyUiConfig
 from .static import _passkey_ui_static_files
 from .templates import PasskeyTemplateRenderer, build_template_environment
-
-if TYPE_CHECKING:
-    from jinja2 import Environment
 
 
 class PasskeyUiConflict(ValueError):
@@ -42,13 +43,29 @@ def install_passkey_ui(
     existing = getattr(app.state, "my_auth_passkey_ui", None)
     if existing is not None:
         if existing.platform != platform or existing.config != resolved_config:
-            raise PasskeyUiConflict("my-auth passkey UI is already installed with different configuration")
+            raise PasskeyUiConflict(
+                "my-auth passkey UI is already installed with different configuration"
+            )
         return existing
 
     installed_platform = getattr(app.state, "app_factory_ui", None)
     if installed_platform != platform:
-        raise AppFactoryUiConflict("platform must be installed on this application before my-auth UI")
+        raise AppFactoryUiConflict(
+            "platform must be installed on this application before my-auth UI"
+        )
 
+    static_mount_path = resolved_config.static_mount_path.rstrip("/")
+    for route in app.routes:
+        existing_path = getattr(route, "path", "").rstrip("/")
+        if existing_path and (
+            static_mount_path == existing_path
+            or static_mount_path.startswith(f"{existing_path}/")
+            or existing_path.startswith(f"{static_mount_path}/")
+        ):
+            raise PasskeyUiConflict(
+                f"static mount path {static_mount_path!r} overlaps existing mount "
+                f"{existing_path!r}"
+            )
     environment = build_template_environment(resolved_config)
     install_app_factory_ui(
         app,
@@ -59,7 +76,8 @@ def install_passkey_ui(
     renderer = PasskeyTemplateRenderer(environment=environment, config=resolved_config)
     wrapped_hooks = PasskeyRouteHooks(
         get_session_user=hooks.get_session_user,
-        make_registration_user=hooks.make_registration_user,
+        prepare_registration=hooks.prepare_registration,
+        complete_registration=hooks.complete_registration,
         get_auth_user=hooks.get_auth_user,
         login=hooks.login,
         logout=hooks.logout,
@@ -76,7 +94,9 @@ def install_passkey_ui(
         cookies=resolved_config.cookies,
     )
     static_files = _passkey_ui_static_files()
-    app.mount(resolved_config.static_mount_path, static_files, name="my-auth-passkey-ui")
+    app.mount(
+        resolved_config.static_mount_path, static_files, name="my-auth-passkey-ui"
+    )
     result = PasskeyUi(
         router=auth_router.router,
         static_mount_path=resolved_config.static_mount_path,
