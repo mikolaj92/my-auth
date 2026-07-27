@@ -163,6 +163,20 @@ def test_login_and_register_templates_wrap_panel_in_passkey_shell() -> None:
         assert 'class="passkey-shell"' in html
 
 
+def test_passkey_panels_use_basecoat_semantic_card_slots() -> None:
+    """Basecoat 1.0 pads .card > header|section, not .card-header/.card-content."""
+    package = files("my_auth.fastapi_htmx")
+    for name in (
+        "templates/_login_panel.html",
+        "templates/_register_panel.html",
+    ):
+        html = package.joinpath(name).read_text(encoding="utf-8")
+        assert "<header" in html
+        assert "<section" in html
+        assert "card-header" not in html
+        assert "card-content" not in html
+
+
 
 def test_installer_is_idempotent_and_rejects_different_setup() -> None:
     app, platform, first = _app()

@@ -28,12 +28,17 @@
   margin-inline: auto;
 }
 
-/* Basecoat .card pad/gap; keep form stacks tight */
+/* Basecoat 1.0 pads .card > header|section; keep form stacks tight.
+ * Fallback padding if a host ships pre-1.0 class names without semantic tags. */
 .passkey-card__header,
 .passkey-card__content,
 .passkey-form {
   display: grid;
   gap: var(--passkey-panel-gap, 1rem);
+}
+
+.passkey-card:not(:has(> header)):not(:has(> section)) {
+  padding: calc(var(--spacing, 0.25rem) * 6);
 }
 
 .passkey-eyebrow {
