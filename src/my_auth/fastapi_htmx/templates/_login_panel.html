@@ -1,7 +1,7 @@
 {# Basecoat 1.0 pads .card > header|section|footer — not .card-header/.card-content. #}
 <section class="card passkey-card" aria-labelledby="passkey-page-title">
   <header class="passkey-card__header">
-    <p class="badge passkey-eyebrow">Passkey sign in</p>
+    <p class="badge passkey-eyebrow" data-variant="secondary">Passkey sign in</p>
     <h1 id="passkey-page-title" class="card-title">Sign in without a password</h1>
     <p class="card-description">
       Use your device passkey prompt to continue. This page keeps WebAuthn API responses as JSON.
@@ -23,13 +23,13 @@
       hx-target="#{{ login_error_target_id }}"
       hx-swap="innerHTML"
     >
-      <button class="btn btn-primary passkey-primary-action" type="submit">Continue with passkey</button>
+      <button class="btn passkey-primary-action" data-variant="primary" type="submit">Continue with passkey</button>
     </form>
     {% set target_id = login_error_target_id %}
     {% set status_message = "Waiting for the WebAuthn passkey prompt." %}
     {% include "_passkey_status.html" %}
     <noscript>
-      <p class="alert passkey-status" role="status">
+      <p class="alert passkey-status" data-variant="destructive" role="status">
         WebAuthn passkeys require JavaScript and a browser with PublicKeyCredential support.
       </p>
     </noscript>

@@ -163,6 +163,22 @@ def test_login_and_register_templates_wrap_panel_in_passkey_shell() -> None:
         assert 'class="passkey-shell"' in html
 
 
+def test_passkey_panels_use_basecoat_button_and_field_conventions() -> None:
+    """Basecoat 1.0: btn + data-variant, not btn-primary; fields use .field."""
+    package = files("my_auth.fastapi_htmx")
+    login = package.joinpath("templates/_login_panel.html").read_text(encoding="utf-8")
+    register = package.joinpath("templates/_register_panel.html").read_text(
+        encoding="utf-8"
+    )
+    for html in (login, register):
+        assert "btn-primary" not in html
+        assert 'data-variant="primary"' in html
+        assert 'class="btn' in html or "class='btn" in html
+    assert 'class="field"' in register
+    js = package.joinpath("static/passkey-ui.js").read_text(encoding="utf-8")
+    assert 'dataset.variant = "destructive"' in js
+
+
 def test_passkey_panels_use_basecoat_semantic_card_slots() -> None:
     """Basecoat 1.0 pads .card > header|section, not .card-header/.card-content."""
     package = files("my_auth.fastapi_htmx")

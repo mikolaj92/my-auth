@@ -22,6 +22,12 @@ function setStatus(form, message, state) {
   const target = statusTarget(form);
   if (!target) return;
   target.dataset.state = state;
+  // Basecoat 1.0 alert variants (not custom color CSS alone).
+  if (state === "error") {
+    target.dataset.variant = "destructive";
+  } else {
+    delete target.dataset.variant;
+  }
   target.textContent = message;
 }
 

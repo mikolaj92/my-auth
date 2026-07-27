@@ -1,5 +1,6 @@
-/*! passkey-ui layout helpers — components (btn, card, input) come from basecoat-factory.
- * Host/apps load Basecoat via app-factory head_assets; this file only centers the ceremony.
+/*! passkey-ui layout helpers only.
+ * Components (btn, card, input, badge, alert, field) come from Basecoat via app-factory.
+ * Do not reintroduce pre-Basecoat class names (e.g. btn-primary, card-header).
  */
 
 .passkey-ui {

@@ -1,7 +1,7 @@
 {# Basecoat 1.0 pads .card > header|section|footer — not .card-header/.card-content. #}
 <section class="card passkey-card" aria-labelledby="passkey-page-title">
   <header class="passkey-card__header">
-    <p class="badge passkey-eyebrow">Passkey registration</p>
+    <p class="badge passkey-eyebrow" data-variant="secondary">Passkey registration</p>
     <h1 id="passkey-page-title" class="card-title">Create a passkey</h1>
     <p class="card-description">
       {% if bootstrap %}
@@ -27,22 +27,24 @@
       hx-target="#{{ register_error_target_id }}"
       hx-swap="innerHTML"
     >
-      <label class="label" for="passkey-display-name">Display name</label>
-      <input
-        id="passkey-display-name"
-        class="input"
-        name="display_name"
-        autocomplete="name"
-        placeholder="Your name"
-        required
-      >
-      <button class="btn btn-primary passkey-primary-action" type="submit">Create passkey</button>
+      <div class="field">
+        <label class="label" for="passkey-display-name">Display name</label>
+        <input
+          id="passkey-display-name"
+          class="input"
+          name="display_name"
+          autocomplete="name"
+          placeholder="Your name"
+          required
+        >
+      </div>
+      <button class="btn passkey-primary-action" data-variant="primary" type="submit">Create passkey</button>
     </form>
     {% set target_id = register_error_target_id %}
     {% set status_message = "Waiting for registration details." %}
     {% include "_passkey_status.html" %}
     <noscript>
-      <p class="alert passkey-status" role="status">
+      <p class="alert passkey-status" data-variant="destructive" role="status">
         WebAuthn passkeys require JavaScript and a browser with PublicKeyCredential support.
       </p>
     </noscript>
