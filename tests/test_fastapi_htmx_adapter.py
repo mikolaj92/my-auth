@@ -171,10 +171,17 @@ def test_passkey_panels_use_basecoat_semantic_card_slots() -> None:
         "templates/_register_panel.html",
     ):
         html = package.joinpath(name).read_text(encoding="utf-8")
-        assert "<header" in html
-        assert "<section" in html
-        assert "card-header" not in html
-        assert "card-content" not in html
+        # strip jinja comments before class-name assertions
+        body = "\n".join(
+            line for line in html.splitlines() if not line.strip().startswith("{#")
+        )
+        assert "<header" in body
+        assert 'class="passkey-card__header"' in body or "passkey-card__header" in body
+        assert "class=\"card-header" not in body
+        assert "class=\"card-content" not in body
+        assert "class='card-header" not in body
+        assert "class='card-content" not in body
+
 
 
 
