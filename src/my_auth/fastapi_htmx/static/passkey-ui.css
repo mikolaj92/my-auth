@@ -10,8 +10,12 @@
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 
+/* Standalone base.html uses body.passkey-ui + .passkey-shell.
+ * app-factory hosts use body.app-shell + main.app-main; templates wrap the
+ * panel in .passkey-shell, and :has() covers hosts that forget the wrap. */
 .passkey-shell,
-.passkey-ui .app-main {
+.passkey-ui .app-main,
+.app-main:has(.passkey-card) {
   box-sizing: border-box;
   display: grid;
   min-height: 100dvh;

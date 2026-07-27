@@ -149,8 +149,19 @@ def test_packaged_css_centers_passkey_panel_in_app_factory_shell() -> None:
         .read_text(encoding="utf-8")
     )
 
+    assert ".passkey-shell" in css
     assert ".passkey-ui .app-main" in css
+    assert ".app-main:has(.passkey-card)" in css
     assert "place-items: center" in css
+
+
+def test_login_and_register_templates_wrap_panel_in_passkey_shell() -> None:
+    """app-factory body is app-shell, not passkey-ui — templates must wrap."""
+    package = files("my_auth.fastapi_htmx")
+    for name in ("templates/login.html", "templates/register.html"):
+        html = package.joinpath(name).read_text(encoding="utf-8")
+        assert 'class="passkey-shell"' in html
+
 
 
 def test_installer_is_idempotent_and_rejects_different_setup() -> None:

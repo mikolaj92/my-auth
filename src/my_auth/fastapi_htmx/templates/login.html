@@ -7,7 +7,10 @@
 {% endblock %}
 
 {% block main %}
-  {% include "_login_panel.html" %}
+  {# app-factory shell uses body.app-shell + main.app-main; wrap so passkey-ui.css can center #}
+  <div class="passkey-shell">
+    {% include "_login_panel.html" %}
+  </div>
 {% endblock %}
 
 {% block body_end %}
