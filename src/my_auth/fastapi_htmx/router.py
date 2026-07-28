@@ -29,6 +29,7 @@ class PasskeyUi:
     static_files: StaticFiles
     platform: AppFactoryUi
     config: PasskeyUiConfig
+    environment: Any = None  # Jinja Environment used for login/register pages
 
 
 def install_passkey_ui(
@@ -103,6 +104,7 @@ def install_passkey_ui(
         static_files=static_files,
         platform=platform,
         config=resolved_config,
+        environment=environment,
     )
     app.include_router(result.router)
     app.state.my_auth_passkey_ui = result
