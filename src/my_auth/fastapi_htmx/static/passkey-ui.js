@@ -1,9 +1,31 @@
 import { loginPasskey, registerPasskey } from "./passkey.js";
 
-const successMessages = {
-  login: "Passkey sign-in succeeded.",
-  register: "Passkey registration succeeded.",
+const defaultMessages = {
+  js_login_success: "Passkey sign-in succeeded.",
+  js_register_success: "Passkey registration succeeded.",
+  js_unsupported:
+    "This browser does not support WebAuthn passkeys with PublicKeyCredential.",
+  js_waiting_prompt: "Waiting for your passkey prompt.",
+  js_request_failed: "Passkey request failed.",
+  js_username_required: "Username is required.",
+  js_username_spaces: "Username must not contain spaces.",
 };
+
+function loadMessages() {
+  const el = document.getElementById("passkey-ui-messages");
+  if (!el || !el.textContent) return { ...defaultMessages };
+  try {
+    const parsed = JSON.parse(el.textContent);
+    if (parsed && typeof parsed === "object") {
+      return { ...defaultMessages, ...parsed };
+    }
+  } catch (_) {
+    /* keep defaults */
+  }
+  return { ...defaultMessages };
+}
+
+const messages = loadMessages();
 
 function csrfHeaders(form) {
   const headerName = form.dataset.csrfHeader;
@@ -33,7 +55,7 @@ function setStatus(form, message, state) {
 
 function assertWebAuthnSupport(form) {
   if (window.PublicKeyCredential && navigator.credentials) return true;
-  setStatus(form, "This browser does not support WebAuthn passkeys with PublicKeyCredential.", "error");
+  setStatus(form, messages.js_unsupported, "error");
   return false;
 }
 
@@ -43,7 +65,8 @@ function handleSuccess(form, action) {
     window.location.assign(successUrl);
     return;
   }
-  setStatus(form, successMessages[action], "success");
+  const key = action === "register" ? "js_register_success" : "js_login_success";
+  setStatus(form, messages[key], "success");
 }
 
 async function submitLogin(form) {
@@ -61,10 +84,10 @@ async function submitRegister(form) {
   const username = usernameInput instanceof HTMLInputElement ? usernameInput.value.trim() : "";
   const displayName = displayNameInput instanceof HTMLInputElement ? displayNameInput.value.trim() : "";
   if (!username) {
-    throw new Error("Username is required.");
+    throw new Error(messages.js_username_required);
   }
   if (/\s/.test(username)) {
-    throw new Error("Username must not contain spaces.");
+    throw new Error(messages.js_username_spaces);
   }
   await registerPasskey({
     optionsUrl: form.dataset.optionsUrl,
@@ -79,7 +102,7 @@ async function submitRegister(form) {
 async function submitPasskeyForm(form) {
   if (!assertWebAuthnSupport(form)) return;
   const action = form.dataset.passkeyForm;
-  setStatus(form, "Waiting for your passkey prompt.", "pending");
+  setStatus(form, messages.js_waiting_prompt, "pending");
   try {
     if (action === "register") {
       await submitRegister(form);
@@ -87,7 +110,7 @@ async function submitPasskeyForm(form) {
     }
     await submitLogin(form);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Passkey request failed.";
+    const message = error instanceof Error ? error.message : messages.js_request_failed;
     setStatus(form, message, "error");
   }
 }

@@ -300,3 +300,75 @@ def test_no_legacy_ui_symbols_or_duplicate_static_helper_source() -> None:
     assert "create_passkey_ui_router" not in router_source + package_source
     assert "def passkey_ui_static_files" not in router_source + package_source
     assert (REPO_ROOT / "src/my_auth/fastapi_htmx/static/passkey.js").is_file()
+
+
+def test_login_locale_switches_copy_and_sets_cookie() -> None:
+    app = FastAPI()
+    platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        app,
+        environments=[],
+        static_path=platform.static_path,
+        mount_name=platform.mount_name,
+    )
+    install_passkey_ui(
+        app,
+        platform=platform,
+        service=_service(),
+        hooks=_hooks(),
+        config=PasskeyUiConfig(
+            locale_cookie_name="app_lang",
+            supported_locales=("pl", "en"),
+            default_locale="pl",
+        ),
+    )
+    client = TestClient(app)
+
+    pl = client.get("/login?lang=pl")
+    assert pl.status_code == 200
+    assert 'lang="pl"' in pl.text
+    assert "Zaloguj się bez hasła" in pl.text
+    assert "Kontynuuj z kluczem dostępu" in pl.text
+    assert "Sign in without a password" not in pl.text
+    assert "app_lang=pl" in pl.headers.get("set-cookie", "")
+    assert 'id="passkey-ui-messages"' in pl.text
+    assert "js_waiting_prompt" in pl.text
+
+    en = client.get("/login?lang=en")
+    assert en.status_code == 200
+    assert 'lang="en"' in en.text
+    assert "Sign in without a password" in en.text
+    assert "Continue with passkey" in en.text
+    assert "Zaloguj się bez hasła" not in en.text
+    assert "app_lang=en" in en.headers.get("set-cookie", "")
+
+    # Cookie alone resolves locale when ?lang= is absent.
+    cookied = client.get("/login", cookies={"app_lang": "en"})
+    assert cookied.status_code == 200
+    assert 'lang="en"' in cookied.text
+    assert "Sign in without a password" in cookied.text
+
+
+def test_login_uses_full_width_content_class_not_app_content_inner() -> None:
+    app, _, _ = _app()
+    client = TestClient(app)
+    html = client.get("/login").text
+    assert 'class="passkey-content"' in html
+    # Avoid the factory content max-width wrapper on the login column.
+    assert 'id="main-content"\n        class="app-content-inner"' not in html
+
+
+def test_packaged_css_forces_full_width_header_on_app_shell() -> None:
+    css = (
+        files("my_auth.fastapi_htmx")
+        .joinpath("static/passkey-ui.css")
+        .read_text(encoding="utf-8")
+    )
+    assert "body.app-shell .app-main > .app-main-header" in css
+    assert "align-self: stretch" in css
+    # place-items centers only the panel, never the whole main column.
+    assert ".passkey-shell" in css
+    assert "place-items: center" in css
+    assert ".app-main:has(.passkey-card) {\n  display: grid;\n  place-items: center" not in css

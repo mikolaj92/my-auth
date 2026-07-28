@@ -1,13 +1,13 @@
 {# Basecoat 1.0 pads .card > header|section|footer — not .card-header/.card-content. #}
 <section class="card passkey-card" aria-labelledby="passkey-page-title">
   <header class="passkey-card__header">
-    <p class="badge passkey-eyebrow" data-variant="secondary">Passkey registration</p>
-    <h1 id="passkey-page-title" class="card-title">Create a passkey</h1>
+    <p class="badge passkey-eyebrow" data-variant="secondary">{{ t.register_eyebrow }}</p>
+    <h1 id="passkey-page-title" class="card-title">{{ t.register_heading }}</h1>
     <p class="card-description">
       {% if bootstrap %}
-        Start by creating a passkey for this account.
+        {{ t.register_description_bootstrap }}
       {% else %}
-        Add a passkey to the current account without changing host registration policy.
+        {{ t.register_description }}
       {% endif %}
     </p>
   </header>
@@ -28,36 +28,36 @@
       hx-swap="innerHTML"
     >
       <div class="field">
-        <label class="label" for="passkey-username">Username</label>
+        <label class="label" for="passkey-username">{{ t.register_username_label }}</label>
         <input
           id="passkey-username"
           class="input"
           name="username"
           autocomplete="username"
-          placeholder="username"
+          placeholder="{{ t.register_username_placeholder }}"
           required
           pattern="\S+"
-          title="Username is required and must not contain spaces"
+          title="{{ t.register_username_title }}"
         >
       </div>
       <div class="field">
-        <label class="label" for="passkey-display-name">Display name (optional)</label>
+        <label class="label" for="passkey-display-name">{{ t.register_display_name_label }}</label>
         <input
           id="passkey-display-name"
           class="input"
           name="display_name"
           autocomplete="name"
-          placeholder="Your name"
+          placeholder="{{ t.register_display_name_placeholder }}"
         >
       </div>
-      <button class="btn passkey-primary-action" data-variant="primary" type="submit">Create passkey</button>
+      <button class="btn passkey-primary-action" data-variant="primary" type="submit">{{ t.register_submit }}</button>
     </form>
     {% set target_id = register_error_target_id %}
-    {% set status_message = "Waiting for registration details." %}
+    {% set status_message = t.register_waiting %}
     {% include "_passkey_status.html" %}
     <noscript>
       <p class="alert passkey-status" data-variant="destructive" role="status">
-        WebAuthn passkeys require JavaScript and a browser with PublicKeyCredential support.
+        {{ t.noscript }}
       </p>
     </noscript>
   </section>

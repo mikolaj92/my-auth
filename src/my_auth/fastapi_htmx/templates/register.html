@@ -1,10 +1,14 @@
 {% extends "app_factory/shell.html" %}
 
-{% block title %}Register a passkey{% endblock %}
+{% block title %}{{ t.register_page_title }}{% endblock %}
 
 {% block head_extra %}
   <link rel="stylesheet" href="{{ passkey_css_url }}">
 {% endblock %}
+
+{% block content_class %}passkey-content{% endblock %}
+
+{% block loading_label %}{{ t.loading }}{% endblock %}
 
 {% block content %}
   <div class="passkey-shell">
@@ -13,5 +17,6 @@
 {% endblock %}
 
 {% block body_end %}
+  <script type="application/json" id="passkey-ui-messages">{{ t_json | safe }}</script>
   <script type="module" src="{{ passkey_js_url }}"></script>
 {% endblock %}

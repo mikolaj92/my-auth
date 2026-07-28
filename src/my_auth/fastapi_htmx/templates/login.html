@@ -1,10 +1,15 @@
 {% extends "app_factory/shell.html" %}
 
-{% block title %}Sign in with a passkey{% endblock %}
+{% block title %}{{ t.login_page_title }}{% endblock %}
 
 {% block head_extra %}
   <link rel="stylesheet" href="{{ passkey_css_url }}">
 {% endblock %}
+
+{# Drop app-content-inner max-width so the login column stays full-bleed under the top bar. #}
+{% block content_class %}passkey-content{% endblock %}
+
+{% block loading_label %}{{ t.loading }}{% endblock %}
 
 {% block content %}
   {# app-factory shell uses body.app-shell + main.app-main; wrap so passkey-ui.css can center #}
@@ -14,5 +19,6 @@
 {% endblock %}
 
 {% block body_end %}
+  <script type="application/json" id="passkey-ui-messages">{{ t_json | safe }}</script>
   <script type="module" src="{{ passkey_js_url }}"></script>
 {% endblock %}

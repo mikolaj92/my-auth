@@ -32,36 +32,58 @@ body.passkey-ui .passkey-shell,
   min-height: 100dvh;
 }
 
-/* Keep app-main as a full-width column when a header is present. */
+/*
+ * Login/register under app-factory shell: force a full-bleed column so the
+ * sticky top bar spans the viewport (not a short centered strip).
+ */
+body.app-shell > .app-main,
+body.app-shell .app-main:has(.passkey-card),
 .app-main:has(> .app-main-header):has(.passkey-card) {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
   min-height: 100dvh;
   width: 100%;
+  max-width: none;
   padding: 0;
+  margin: 0;
 }
 
+body.app-shell .app-main > .app-main-header,
 .app-main:has(> .app-main-header):has(.passkey-card) > .app-main-header {
+  box-sizing: border-box;
   width: 100%;
+  max-width: none;
   flex: 0 0 auto;
+  align-self: stretch;
 }
 
+body.app-shell .app-main > .app-main-content,
 .app-main:has(> .app-main-header):has(.passkey-card) > .app-main-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
   min-height: 0;
   width: 100%;
+  max-width: none;
 }
 
-.app-main:has(> .app-main-header):has(.passkey-card) #main-content {
+body.app-shell .app-main #main-content,
+.app-main:has(> .app-main-header):has(.passkey-card) #main-content,
+.passkey-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
   width: 100%;
   max-width: none;
   margin-inline: 0;
   padding: 0;
+  min-height: 0;
 }
 
 .passkey-card {
@@ -97,14 +119,4 @@ body.passkey-ui .passkey-shell,
 .passkey-status[data-state="success"] {
   border-color: var(--color-success, var(--success, #16a34a));
   color: var(--color-success, var(--success, #16a34a));
-}
-
-.passkey-status[data-state="error"] {
-  border-color: var(--color-destructive, var(--destructive, #dc2626));
-  color: var(--color-destructive, var(--destructive, #dc2626));
-}
-
-/* Align status with Basecoat alert when present */
-.passkey-status.alert {
-  margin: 0;
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -10,6 +11,7 @@ from jinja2 import ChoiceLoader, Environment, PackageLoader, select_autoescape
 from starlette.responses import HTMLResponse, Response
 
 from .config import MaybeAwaitable, PasskeyUiConfig
+from .i18n import ui_copy
 
 T = TypeVar("T")
 
@@ -31,6 +33,7 @@ class PasskeyTemplateRenderer:
         static_base = self.config.static_url_path.rstrip("/")
         csrf_token = await _maybe_await(self.config.csrf_token(request))
         lang = _resolve_locale(request, self.config)
+        copy = dict(ui_copy(lang, default=self.config.default_locale))
         content = self.environment.get_template(template_name).render(
             request=request,
             paths=self.config.paths,
@@ -46,6 +49,9 @@ class PasskeyTemplateRenderer:
             # Drive app-factory shell lang + flag dropdown selected state.
             lang=lang,
             platform_locale=lang,
+            # Localized login/register chrome + client message map.
+            t=copy,
+            t_json=json.dumps(copy, ensure_ascii=False, separators=(",", ":")),
         )
         response = HTMLResponse(content)
         cookie_name = self.config.locale_cookie_name
