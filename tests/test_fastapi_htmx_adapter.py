@@ -150,9 +150,10 @@ def test_packaged_css_centers_passkey_panel_in_app_factory_shell() -> None:
     )
 
     assert ".passkey-shell" in css
-    assert ".passkey-ui .app-main" in css
-    assert ".app-main:has(.passkey-card)" in css
     assert "place-items: center" in css
+    # Full-width header: do not grid-center the entire .app-main when a top bar exists.
+    assert ".app-main:has(> .app-main-header):has(.passkey-card)" in css
+    assert "flex-direction: column" in css
 
 
 def test_login_and_register_templates_wrap_panel_in_passkey_shell() -> None:

@@ -30,6 +30,11 @@ class PasskeyUiConfig:
     register_success_url: str | None = None
     login_error_target_id: str = "passkey-login-status"
     register_error_target_id: str = "passkey-register-status"
+    # When set, ?lang= / cookie is applied to login/register chrome and persisted.
+    locale_cookie_name: str | None = None
+    locale_query_param: str = "lang"
+    supported_locales: tuple[str, ...] = ("pl", "en")
+    default_locale: str = "en"
 
     def __post_init__(self) -> None:
         for field_name in ("static_mount_path", "static_url_path"):
