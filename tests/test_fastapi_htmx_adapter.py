@@ -65,7 +65,7 @@ def _hooks() -> PasskeyRouteHooks:
     async def session(_request: Request):
         return None
 
-    async def prepare(_request: Request, _display_name: str):
+    async def prepare(_request: Request, _username: str):
         return user
 
     async def complete(_request: Request, result: VerifiedRegistration):

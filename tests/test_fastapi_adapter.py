@@ -30,7 +30,8 @@ def _app(
     async def session(_request: Request):
         return None
 
-    async def prepare(_request: Request, display_name: str):
+    async def prepare(_request: Request, username: str):
+        del username
         return user
 
     async def complete(_request: Request, result: VerifiedRegistration):
@@ -77,16 +78,37 @@ def _app(
 def test_options_use_distinct_flow_cookies() -> None:
     client, _ = _app()
     login = client.post("/api/auth/login/options")
-    register = client.post("/api/auth/register/options", json={"display_name": "name"})
+    register = client.post("/api/auth/register/options", json={"username": "name"})
     assert "passkey_authentication_challenge=" in login.headers["set-cookie"]
     assert "passkey_registration_challenge=" in register.headers["set-cookie"]
+
+
+def test_registration_requires_username_field() -> None:
+    client, _ = _app()
+    assert (
+        client.post(
+            "/api/auth/register/options", json={"display_name": "legacy"}
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post("/api/auth/register/options", json={"name": "legacy"}).status_code
+        == 400
+    )
+    assert client.post("/api/auth/register/options", json={}).status_code == 400
+    assert (
+        client.post(
+            "/api/auth/register/options", json={"username": "has space"}
+        ).status_code
+        == 400
+    )
 
 
 def test_registration_policy_denial_prevents_challenge() -> None:
     client, service = _app(allowed=False)
     assert (
         client.post(
-            "/api/auth/register/options", json={"display_name": "name"}
+            "/api/auth/register/options", json={"username": "name"}
         ).status_code
         == 403
     )

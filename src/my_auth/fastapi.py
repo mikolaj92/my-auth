@@ -384,16 +384,13 @@ async def _json_body(request: Request) -> dict[str, object]:
 def _registration_username(body: Mapping[str, object]) -> str:
     """Require a public username handle (passkey is the secret, not the name).
 
-    Accepts ``username`` (preferred) or legacy ``display_name`` / ``name``.
+    Only the ``username`` field is accepted. Legacy aliases such as
+    ``display_name`` / ``name`` are intentionally rejected so registration
+    cannot silently treat a display label as the unique public handle.
     Rejects empty values and whitespace inside the handle so hosts can map it
     onto my-usermanager ``User.username`` without silent sanitization.
     """
-    value = (
-        body.get("username")
-        or body.get("display_name")
-        or body.get("displayName")
-        or body.get("name")
-    )
+    value = body.get("username")
     if not isinstance(value, str) or not value.strip():
         raise HTTPException(status_code=400, detail="username is required")
     username = value.strip()

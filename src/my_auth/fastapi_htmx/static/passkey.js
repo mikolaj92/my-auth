@@ -81,10 +81,15 @@ export async function registerPasskey({
   optionsBody = {},
   fetchOptions = {},
 } = {}) {
-  const registrationOptionsBody = { ...optionsBody };
-  if (username !== undefined && username !== null && username !== "") {
-    registrationOptionsBody.username = username;
+  const handle = typeof username === "string" ? username.trim() : "";
+  if (!handle) {
+    throw new Error("Username is required.");
   }
+  if (/\s/.test(handle)) {
+    throw new Error("Username must not contain spaces.");
+  }
+  const registrationOptionsBody = { ...optionsBody, username: handle };
+  // Optional display label only — never a substitute for username.
   const registrationDisplayName = display_name ?? displayName;
   if (registrationDisplayName !== undefined && registrationDisplayName !== "") {
     registrationOptionsBody.display_name = registrationDisplayName;
