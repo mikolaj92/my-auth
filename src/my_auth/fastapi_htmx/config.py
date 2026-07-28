@@ -33,7 +33,7 @@ class PasskeyUiConfig:
     # When set, ?lang= / cookie is applied to login/register chrome and persisted.
     locale_cookie_name: str | None = None
     locale_query_param: str = "lang"
-    supported_locales: tuple[str, ...] = ("pl", "en")
+    supported_locales: tuple[str, ...] = ("pl", "en", "de")
     default_locale: str = "en"
 
     def __post_init__(self) -> None:

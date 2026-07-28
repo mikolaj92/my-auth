@@ -320,7 +320,7 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
         hooks=_hooks(),
         config=PasskeyUiConfig(
             locale_cookie_name="app_lang",
-            supported_locales=("pl", "en"),
+            supported_locales=("pl", "en", "de"),
             default_locale="pl",
         ),
     )
@@ -344,11 +344,24 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Zaloguj się bez hasła" not in en.text
     assert "app_lang=en" in en.headers.get("set-cookie", "")
 
+    de = client.get("/login?lang=de")
+    assert de.status_code == 200
+    assert 'lang="de"' in de.text
+    assert "Ohne Passwort anmelden" in de.text
+    assert "Mit Passkey fortfahren" in de.text
+    assert "Sign in without a password" not in de.text
+    assert "app_lang=de" in de.headers.get("set-cookie", "")
+
     # Cookie alone resolves locale when ?lang= is absent.
     cookied = client.get("/login", cookies={"app_lang": "en"})
     assert cookied.status_code == 200
     assert 'lang="en"' in cookied.text
     assert "Sign in without a password" in cookied.text
+
+    cookied_de = client.get("/login", cookies={"app_lang": "de"})
+    assert cookied_de.status_code == 200
+    assert 'lang="de"' in cookied_de.text
+    assert "Ohne Passwort anmelden" in cookied_de.text
 
 
 def test_login_uses_full_width_content_class_not_app_content_inner() -> None:

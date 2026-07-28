@@ -88,6 +88,50 @@ _COPY: dict[str, dict[str, str]] = {
         "js_username_required": "Nazwa użytkownika jest wymagana.",
         "js_username_spaces": "Nazwa użytkownika nie może zawierać spacji.",
     },
+    "de": {
+        "login_page_title": "Mit Passkey anmelden",
+        "login_eyebrow": "Passkey-Anmeldung",
+        "login_heading": "Ohne Passwort anmelden",
+        "login_description": (
+            "Nutzen Sie die Passkey-Aufforderung Ihres Geräts, um fortzufahren. "
+            "Diese Seite liefert WebAuthn-API-Antworten als JSON."
+        ),
+        "login_submit": "Mit Passkey fortfahren",
+        "login_waiting": "Warten auf die WebAuthn-Passkey-Aufforderung.",
+        "register_page_title": "Passkey registrieren",
+        "register_eyebrow": "Passkey-Registrierung",
+        "register_heading": "Passkey erstellen",
+        "register_description": (
+            "Fügen Sie dem aktuellen Konto einen Passkey hinzu, "
+            "ohne die Registrierungsrichtlinie des Hosts zu ändern."
+        ),
+        "register_description_bootstrap": (
+            "Erstellen Sie zunächst einen Passkey für dieses Konto."
+        ),
+        "register_username_label": "Benutzername",
+        "register_username_placeholder": "benutzername",
+        "register_username_title": (
+            "Benutzername ist erforderlich und darf keine Leerzeichen enthalten"
+        ),
+        "register_display_name_label": "Anzeigename (optional)",
+        "register_display_name_placeholder": "Ihr Name",
+        "register_submit": "Passkey erstellen",
+        "register_waiting": "Warten auf Registrierungsdaten.",
+        "noscript": (
+            "WebAuthn-Passkeys erfordern JavaScript und einen Browser "
+            "mit PublicKeyCredential-Unterstützung."
+        ),
+        "loading": "Laden…",
+        "js_login_success": "Passkey-Anmeldung erfolgreich.",
+        "js_register_success": "Passkey-Registrierung erfolgreich.",
+        "js_unsupported": (
+            "Dieser Browser unterstützt keine WebAuthn-Passkeys (PublicKeyCredential)."
+        ),
+        "js_waiting_prompt": "Warten auf Ihre Passkey-Aufforderung.",
+        "js_request_failed": "Passkey-Anfrage fehlgeschlagen.",
+        "js_username_required": "Benutzername ist erforderlich.",
+        "js_username_spaces": "Benutzername darf keine Leerzeichen enthalten.",
+    },
 }
 
 
