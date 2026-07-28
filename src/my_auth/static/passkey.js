@@ -75,14 +75,20 @@ async function postJSON(url, body, fetchOptions = {}) {
 export async function registerPasskey({
   optionsUrl = "/api/auth/register/options",
   verifyUrl = "/api/auth/register/verify",
+  username,
   displayName,
   display_name,
   optionsBody = {},
   fetchOptions = {},
 } = {}) {
   const registrationOptionsBody = { ...optionsBody };
+  if (username !== undefined && username !== null && username !== "") {
+    registrationOptionsBody.username = username;
+  }
   const registrationDisplayName = display_name ?? displayName;
-  if (registrationDisplayName !== undefined) registrationOptionsBody.display_name = registrationDisplayName;
+  if (registrationDisplayName !== undefined && registrationDisplayName !== "") {
+    registrationOptionsBody.display_name = registrationDisplayName;
+  }
 
   const options = await postJSON(optionsUrl, registrationOptionsBody, fetchOptions);
   const credential = await navigator.credentials.create({ publicKey: parseCreationOptions(options) });

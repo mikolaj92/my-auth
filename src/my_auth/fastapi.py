@@ -284,7 +284,7 @@ class PasskeyAuthRouter:
         session_user = await _maybe_await(self.hooks.get_session_user(request))
         user = session_user or await _maybe_await(
             self.hooks.prepare_registration(
-                request, _registration_display_name(await _json_body(request))
+                request, _registration_username(await _json_body(request))
             )
         )
         flow_id = self._new_flow_id()
@@ -381,11 +381,28 @@ async def _json_body(request: Request) -> dict[str, object]:
     return cast(dict[str, object], value)
 
 
-def _registration_display_name(body: Mapping[str, object]) -> str:
-    value = body.get("display_name") or body.get("displayName") or body.get("name")
+def _registration_username(body: Mapping[str, object]) -> str:
+    """Require a public username handle (passkey is the secret, not the name).
+
+    Accepts ``username`` (preferred) or legacy ``display_name`` / ``name``.
+    Rejects empty values and whitespace inside the handle so hosts can map it
+    onto my-usermanager ``User.username`` without silent sanitization.
+    """
+    value = (
+        body.get("username")
+        or body.get("display_name")
+        or body.get("displayName")
+        or body.get("name")
+    )
     if not isinstance(value, str) or not value.strip():
-        raise HTTPException(status_code=400, detail="display_name is required")
-    return value.strip()
+        raise HTTPException(status_code=400, detail="username is required")
+    username = value.strip()
+    if any(character.isspace() for character in username):
+        raise HTTPException(
+            status_code=400,
+            detail="username must not contain whitespace",
+        )
+    return username
 
 
 def _without_legacy_user_handle(credential: dict[str, object]) -> dict[str, object]:

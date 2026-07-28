@@ -28,14 +28,26 @@
       hx-swap="innerHTML"
     >
       <div class="field">
-        <label class="label" for="passkey-display-name">Display name</label>
+        <label class="label" for="passkey-username">Username</label>
+        <input
+          id="passkey-username"
+          class="input"
+          name="username"
+          autocomplete="username"
+          placeholder="username"
+          required
+          pattern="\S+"
+          title="Username is required and must not contain spaces"
+        >
+      </div>
+      <div class="field">
+        <label class="label" for="passkey-display-name">Display name (optional)</label>
         <input
           id="passkey-display-name"
           class="input"
           name="display_name"
           autocomplete="name"
           placeholder="Your name"
-          required
         >
       </div>
       <button class="btn passkey-primary-action" data-variant="primary" type="submit">Create passkey</button>
