@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -35,8 +35,8 @@ wheels = [
 
 [[package]]
 name = "app-factory"
-version = "0.5.10"
-source = { git = "https://github.com/mikolaj92/app-factory?tag=v0.5.10#28363f822703aa8f8dcc0e864fbfc273478bbbe0" }
+version = "0.5.18"
+source = { git = "https://github.com/mikolaj92/app-factory?tag=v0.5.18#e20a10a4fa51c61911a060337b4dd2a603d11444" }
 dependencies = [
     { name = "jinja2" },
 ]
@@ -429,7 +429,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "app-factory", extras = ["fastapi"], marker = "extra == 'fastapi-htmx'", git = "https://github.com/mikolaj92/app-factory?tag=v0.5.10" },
+    { name = "app-factory", extras = ["fastapi"], marker = "extra == 'fastapi-htmx'", git = "https://github.com/mikolaj92/app-factory?tag=v0.5.18" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.115" },
     { name = "fastapi", marker = "extra == 'fastapi-htmx'", specifier = ">=0.115" },
     { name = "jinja2", marker = "extra == 'fastapi-htmx'", specifier = ">=3.1" },
@@ -440,7 +440,7 @@ provides-extras = ["fastapi", "fastapi-htmx"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "app-factory", extras = ["fastapi"], git = "https://github.com/mikolaj92/app-factory?tag=v0.5.10" },
+    { name = "app-factory", extras = ["fastapi"], git = "https://github.com/mikolaj92/app-factory?tag=v0.5.18" },
     { name = "basedpyright", specifier = ">=1.21" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
