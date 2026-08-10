@@ -5,6 +5,7 @@ import importlib
 import subprocess
 import sys
 import textwrap
+import tomllib
 from importlib.resources import files
 from pathlib import Path
 
@@ -127,35 +128,18 @@ def _app() -> tuple[FastAPI, AppFactoryUi, PasskeyUi]:
     ui = install_passkey_ui(app, platform=platform, service=_service(), hooks=_hooks())
     return app, platform, ui
 
+def test_repository_app_factory_pin_matches_lock() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text())
 
-def test_repository_app_factory_pin_matches_exercised_compatibility() -> None:
-    app, _, ui = _app()
-    client = TestClient(app)
-    login = client.get("/login")
-    register = client.get("/register")
-    javascript = client.get(f"{ui.static_mount_path}/passkey-ui.js")
-    package_javascript = client.get(f"{ui.static_mount_path}/passkey.js")
+    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.19"
+    app_factory = next(
+        package for package in lock["package"] if package["name"] == "app-factory"
+    )
+    assert app_factory["version"] == "0.5.19"
+    assert "tag=v0.5.19" in app_factory["source"]["git"]
 
-    assert (
-        login.status_code
-        == register.status_code
-        == javascript.status_code
-        == package_javascript.status_code
-        == 200
-    )
-    assert login.headers["content-type"].startswith("text/html")
-    assert register.headers["content-type"].startswith("text/html")
-    assert "app-shell" in login.text
-    assert "app-shell" in register.text
-    assert f"{ui.static_mount_path}/passkey-ui.js" in login.text
-    assert f"{ui.static_mount_path}/passkey-ui.js" in register.text
-    assert 'from "./passkey.js"' in javascript.text
-    assert "export async function loginPasskey" in package_javascript.text
-    assert "export async function registerPasskey" in package_javascript.text
-    assert (
-        files("my_auth").joinpath("static/passkey.js").read_text()
-        == package_javascript.text
-    )
+
 
 
 def test_public_api_has_only_installer_contract() -> None:
@@ -224,10 +208,12 @@ def test_passkey_panels_use_basecoat_semantic_card_slots() -> None:
         )
         assert "<header" in body
         assert 'class="passkey-card__header"' in body or "passkey-card__header" in body
-        assert 'class="card-header' not in body
-        assert 'class="card-content' not in body
+        assert "class=\"card-header" not in body
+        assert "class=\"card-content" not in body
         assert "class='card-header" not in body
         assert "class='card-content" not in body
+
+
 
 
 def test_installer_is_idempotent_and_rejects_different_setup() -> None:
@@ -277,6 +263,35 @@ def test_installer_rejects_static_mount_overlap() -> None:
                     static_url_path=path,
                 ),
             )
+
+
+def test_testclient_smoke_pages_and_package_js() -> None:
+    app, _, ui = _app()
+    client = TestClient(app)
+    login = client.get("/login")
+    register = client.get("/register")
+    javascript = client.get(f"{ui.static_mount_path}/passkey-ui.js")
+    package_javascript = client.get(f"{ui.static_mount_path}/passkey.js")
+    assert (
+        login.status_code
+        == register.status_code
+        == javascript.status_code
+        == package_javascript.status_code
+        == 200
+    )
+    assert login.headers["content-type"].startswith("text/html")
+    assert register.headers["content-type"].startswith("text/html")
+    assert "app-shell" in login.text
+    assert "app-shell" in register.text
+    assert f"{ui.static_mount_path}/passkey-ui.js" in login.text
+    assert f"{ui.static_mount_path}/passkey-ui.js" in register.text
+    assert 'from "./passkey.js"' in javascript.text
+    assert "export async function loginPasskey" in package_javascript.text
+    assert "export async function registerPasskey" in package_javascript.text
+    assert (
+        files("my_auth").joinpath("static/passkey.js").read_text()
+        == package_javascript.text
+    )
 
 
 def test_adapter_keeps_one_json_router_and_host_owns_hooks() -> None:
@@ -383,7 +398,4 @@ def test_packaged_css_forces_full_width_header_on_app_shell() -> None:
     # place-items centers only the panel, never the whole main column.
     assert ".passkey-shell" in css
     assert "place-items: center" in css
-    assert (
-        ".app-main:has(.passkey-card) {\n  display: grid;\n  place-items: center"
-        not in css
-    )
+    assert ".app-main:has(.passkey-card) {\n  display: grid;\n  place-items: center" not in css
