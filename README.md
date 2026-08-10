@@ -19,9 +19,10 @@ uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git"
 ```
 
 This repository resolves app-factory from tag `v0.5.19` through its uv source
-configuration, matching the [v0.5.19 compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.5.19/COMPAT.md)
-for my-auth `v0.3.23`. The published `fastapi-htmx` extra accepts
-`app-factory>=0.5`.
+configuration. Its [v0.5.19 compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.5.19/COMPAT.md)
+still lists my-auth `v0.3.23`; this package remains at the newer `v0.3.24`
+rather than regressing release metadata. The published `fastapi-htmx` extra
+accepts `app-factory>=0.5`.
 
 The core import is `my_auth`. The FastAPI router is explicitly imported from
 `my_auth.fastapi`; the server-rendered UI is explicitly imported from

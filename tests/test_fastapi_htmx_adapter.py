@@ -39,14 +39,14 @@ from my_auth.fastapi_htmx import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_repository_app_factory_pin_matches_bom_and_lock() -> None:
+def test_repository_app_factory_pin_and_lock_metadata() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text())
     app_factory = next(
         package for package in lock["package"] if package["name"] == "app-factory"
     )
 
-    assert project["project"]["version"] == "0.3.23"
+    assert project["project"]["version"] == "0.3.24"
     assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.19"
     assert app_factory["version"] == "0.5.19"
     assert "tag=v0.5.19#" in app_factory["source"]["git"]
