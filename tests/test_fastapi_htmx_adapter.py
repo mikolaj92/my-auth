@@ -7,6 +7,8 @@ import sys
 import textwrap
 from importlib.resources import files
 from pathlib import Path
+from importlib.metadata import version
+
 
 import pytest
 from app_factory.fastapi import (
@@ -35,6 +37,10 @@ from my_auth.fastapi_htmx import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_supported_app_factory_patch_is_installed() -> None:
+    assert version("app-factory") == "0.5.19"
 
 
 def test_root_import_keeps_optional_ui_boundary_unloaded() -> None:
@@ -194,12 +200,10 @@ def test_passkey_panels_use_basecoat_semantic_card_slots() -> None:
         )
         assert "<header" in body
         assert 'class="passkey-card__header"' in body or "passkey-card__header" in body
-        assert "class=\"card-header" not in body
-        assert "class=\"card-content" not in body
+        assert 'class="card-header' not in body
+        assert 'class="card-content' not in body
         assert "class='card-header" not in body
         assert "class='card-content" not in body
-
-
 
 
 def test_installer_is_idempotent_and_rejects_different_setup() -> None:
@@ -384,4 +388,7 @@ def test_packaged_css_forces_full_width_header_on_app_shell() -> None:
     # place-items centers only the panel, never the whole main column.
     assert ".passkey-shell" in css
     assert "place-items: center" in css
-    assert ".app-main:has(.passkey-card) {\n  display: grid;\n  place-items: center" not in css
+    assert (
+        ".app-main:has(.passkey-card) {\n  display: grid;\n  place-items: center"
+        not in css
+    )
