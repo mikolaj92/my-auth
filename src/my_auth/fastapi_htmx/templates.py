@@ -26,15 +26,19 @@ class PasskeyTemplateRenderer:
 
     async def render_register(self, request: Request, *, bootstrap: bool) -> Response:
         return await self._render("register.html", request, bootstrap=bootstrap)
+    async def render_account_panel(self, request: Request) -> str:
+        """Render the packaged registration UI for a signed-in account page."""
+        return await self._render_content("account_panel.html", request, bootstrap=False)
 
-    async def _render(
+
+    async def _render_content(
         self, template_name: str, request: Request, *, bootstrap: bool
-    ) -> Response:
+    ) -> str:
         static_base = self.config.static_url_path.rstrip("/")
         csrf_token = await _maybe_await(self.config.csrf_token(request))
         lang = _resolve_locale(request, self.config)
         copy = dict(ui_copy(lang, default=self.config.default_locale))
-        content = self.environment.get_template(template_name).render(
+        return self.environment.get_template(template_name).render(
             request=request,
             paths=self.config.paths,
             bootstrap=bootstrap,
@@ -53,6 +57,12 @@ class PasskeyTemplateRenderer:
             t=copy,
             t_json=json.dumps(copy, ensure_ascii=False, separators=(",", ":")),
         )
+
+    async def _render(
+        self, template_name: str, request: Request, *, bootstrap: bool
+    ) -> Response:
+        content = await self._render_content(template_name, request, bootstrap=bootstrap)
+        lang = _resolve_locale(request, self.config)
         response = HTMLResponse(content)
         cookie_name = self.config.locale_cookie_name
         if cookie_name and lang in self.config.supported_locales:

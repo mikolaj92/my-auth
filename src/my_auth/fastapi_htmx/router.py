@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable, Coroutine
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from starlette.staticfiles import StaticFiles
 
 from app_factory.fastapi import (
@@ -29,6 +29,7 @@ class PasskeyUi:
     static_files: StaticFiles
     platform: AppFactoryUi
     config: PasskeyUiConfig
+    render_account_panel: Callable[[Request], Coroutine[Any, Any, str]]
     environment: Any = None  # Jinja Environment used for login/register pages
 
 
@@ -104,6 +105,7 @@ def install_passkey_ui(
         static_files=static_files,
         platform=platform,
         config=resolved_config,
+        render_account_panel=renderer.render_account_panel,
         environment=environment,
     )
     app.include_router(result.router)

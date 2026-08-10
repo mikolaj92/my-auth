@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import asyncio
 import importlib
 import subprocess
 import sys
@@ -135,12 +136,12 @@ def test_repository_app_factory_pin_matches_lock() -> None:
     )
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
 
-    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.20"
+    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.21"
     app_factory = next(
         package for package in lock["package"] if package["name"] == "app-factory"
     )
-    assert app_factory["version"] == "0.5.20"
-    assert "tag=v0.5.20" in app_factory["source"]["git"]
+    assert app_factory["version"] == "0.5.21"
+    assert "tag=v0.5.21" in app_factory["source"]["git"]
 
 
 def test_public_api_has_only_installer_contract() -> None:
@@ -292,6 +293,27 @@ def test_testclient_smoke_pages_and_package_js() -> None:
         files("my_auth").joinpath("static/passkey.js").read_text()
         == package_javascript.text
     )
+
+
+def test_installed_ui_renders_packaged_account_registration_panel() -> None:
+    _, _, ui = _app()
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/account",
+            "headers": [],
+            "query_string": b"",
+        }
+    )
+
+    panel = asyncio.run(ui.render_account_panel(request))
+
+    assert 'data-passkey-form="register"' in panel
+    assert 'data-options-url="/api/auth/register/options"' in panel
+    assert f'href="{ui.config.static_url_path}/passkey-ui.css"' in panel
+    assert f'src="{ui.config.static_url_path}/passkey-ui.js"' in panel
+    assert 'id="passkey-ui-messages"' in panel
 
 
 def test_adapter_keeps_one_json_router_and_host_owns_hooks() -> None:
