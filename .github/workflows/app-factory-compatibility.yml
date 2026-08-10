@@ -1,0 +1,20 @@
+name: app-factory compatibility
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Check lockfile
+        run: uv lock --check
+      - name: Run adapter suite
+        run: uv run --frozen pytest tests/test_fastapi_htmx_adapter.py

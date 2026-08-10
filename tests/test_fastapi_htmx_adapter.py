@@ -5,6 +5,7 @@ import importlib
 import subprocess
 import sys
 import textwrap
+import tomllib
 from importlib.resources import files
 from pathlib import Path
 
@@ -128,6 +129,20 @@ def _app() -> tuple[FastAPI, AppFactoryUi, PasskeyUi]:
     return app, platform, ui
 
 
+def test_repository_app_factory_pin_matches_lock() -> None:
+    project = tomllib.loads(
+        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
+
+    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.19"
+    app_factory = next(
+        package for package in lock["package"] if package["name"] == "app-factory"
+    )
+    assert app_factory["version"] == "0.5.19"
+    assert "tag=v0.5.19" in app_factory["source"]["git"]
+
+
 def test_public_api_has_only_installer_contract() -> None:
     module = importlib.import_module("my_auth.fastapi_htmx")
     assert set(module.__all__) == {
@@ -198,7 +213,6 @@ def test_passkey_panels_use_basecoat_semantic_card_slots() -> None:
         assert "class=\"card-content" not in body
         assert "class='card-header" not in body
         assert "class='card-content" not in body
-
 
 
 

@@ -18,6 +18,12 @@ uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git"
 uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git"
 ```
 
+This repository uses app-factory tag `v0.5.19` to test the optional HTMX
+adapter. It is a library, not a production host using `app-factory[platform]`,
+so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.5.19/COMPAT.md)
+does not define this package's version. The published `fastapi-htmx` extra
+continues to accept compatible `app-factory>=0.5` releases.
+
 The core import is `my_auth`. The FastAPI router is explicitly imported from
 `my_auth.fastapi`; the server-rendered UI is explicitly imported from
 `my_auth.fastapi_htmx`. Optional imports are not performed by `import my_auth`.
