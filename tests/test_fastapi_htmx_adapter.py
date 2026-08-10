@@ -128,6 +128,7 @@ def _app() -> tuple[FastAPI, AppFactoryUi, PasskeyUi]:
     ui = install_passkey_ui(app, platform=platform, service=_service(), hooks=_hooks())
     return app, platform, ui
 
+
 def test_repository_app_factory_pin_matches_lock() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text())
