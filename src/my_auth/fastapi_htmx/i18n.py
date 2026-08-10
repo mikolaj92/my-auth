@@ -15,6 +15,8 @@ _COPY: dict[str, dict[str, str]] = {
             "This page keeps WebAuthn API responses as JSON."
         ),
         "login_submit": "Continue with passkey",
+        "login_hybrid": "Sign in with a phone (QR code)",
+        "login_register": "No account? Register a passkey",
         "login_waiting": "Waiting for the WebAuthn passkey prompt.",
         "register_page_title": "Register a passkey",
         "register_eyebrow": "Passkey registration",
@@ -41,6 +43,9 @@ _COPY: dict[str, dict[str, str]] = {
             "This browser does not support WebAuthn passkeys with PublicKeyCredential."
         ),
         "js_waiting_prompt": "Waiting for your passkey prompt.",
+        "js_hybrid_prompt": (
+            "In the passkey prompt, choose another device and scan the QR code."
+        ),
         "js_request_failed": "Passkey request failed.",
         "js_username_required": "Username is required.",
         "js_username_spaces": "Username must not contain spaces.",
@@ -54,6 +59,8 @@ _COPY: dict[str, dict[str, str]] = {
             "Ta strona zwraca odpowiedzi API WebAuthn jako JSON."
         ),
         "login_submit": "Kontynuuj z kluczem dostępu",
+        "login_hybrid": "Zaloguj się telefonem (kod QR)",
+        "login_register": "Nie masz konta? Zarejestruj klucz dostępu",
         "login_waiting": "Oczekiwanie na monit WebAuthn klucza dostępu.",
         "register_page_title": "Zarejestruj klucz dostępu",
         "register_eyebrow": "Rejestracja klucza",
@@ -84,6 +91,9 @@ _COPY: dict[str, dict[str, str]] = {
             "Ta przeglądarka nie obsługuje kluczy WebAuthn (PublicKeyCredential)."
         ),
         "js_waiting_prompt": "Oczekiwanie na monit klucza dostępu.",
+        "js_hybrid_prompt": (
+            "W monicie klucza wybierz inne urządzenie i zeskanuj kod QR."
+        ),
         "js_request_failed": "Żądanie klucza dostępu nie powiodło się.",
         "js_username_required": "Nazwa użytkownika jest wymagana.",
         "js_username_spaces": "Nazwa użytkownika nie może zawierać spacji.",
@@ -97,6 +107,8 @@ _COPY: dict[str, dict[str, str]] = {
             "Diese Seite liefert WebAuthn-API-Antworten als JSON."
         ),
         "login_submit": "Mit Passkey fortfahren",
+        "login_hybrid": "Mit einem Telefon anmelden (QR-Code)",
+        "login_register": "Noch kein Konto? Passkey registrieren",
         "login_waiting": "Warten auf die WebAuthn-Passkey-Aufforderung.",
         "register_page_title": "Passkey registrieren",
         "register_eyebrow": "Passkey-Registrierung",
@@ -128,6 +140,9 @@ _COPY: dict[str, dict[str, str]] = {
             "Dieser Browser unterstützt keine WebAuthn-Passkeys (PublicKeyCredential)."
         ),
         "js_waiting_prompt": "Warten auf Ihre Passkey-Aufforderung.",
+        "js_hybrid_prompt": (
+            "Wählen Sie ein anderes Gerät und scannen Sie den QR-Code."
+        ),
         "js_request_failed": "Passkey-Anfrage fehlgeschlagen.",
         "js_username_required": "Benutzername ist erforderlich.",
         "js_username_spaces": "Benutzername darf keine Leerzeichen enthalten.",

@@ -69,10 +69,11 @@ function handleSuccess(form, action) {
   setStatus(form, messages[key], "success");
 }
 
-async function submitLogin(form) {
+async function submitLogin(form, hint) {
   await loginPasskey({
     optionsUrl: form.dataset.optionsUrl,
     verifyUrl: form.dataset.verifyUrl,
+    hint,
     fetchOptions: { headers: csrfHeaders(form) },
   });
   handleSuccess(form, "login");
@@ -99,16 +100,20 @@ async function submitRegister(form) {
   handleSuccess(form, "register");
 }
 
-async function submitPasskeyForm(form) {
+async function submitPasskeyForm(form, hint) {
   if (!assertWebAuthnSupport(form)) return;
   const action = form.dataset.passkeyForm;
-  setStatus(form, messages.js_waiting_prompt, "pending");
+  setStatus(
+    form,
+    hint === "hybrid" ? messages.js_hybrid_prompt : messages.js_waiting_prompt,
+    "pending",
+  );
   try {
     if (action === "register") {
       await submitRegister(form);
       return;
     }
-    await submitLogin(form);
+    await submitLogin(form, hint);
   } catch (error) {
     const message = error instanceof Error ? error.message : messages.js_request_failed;
     setStatus(form, message, "error");
@@ -120,6 +125,9 @@ function bindPasskeyForm(form) {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     void submitPasskeyForm(form);
+  });
+  form.querySelector("[data-passkey-hybrid]")?.addEventListener("click", () => {
+    void submitPasskeyForm(form, "hybrid");
   });
 }
 

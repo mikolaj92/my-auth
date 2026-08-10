@@ -108,7 +108,8 @@ body.app-shell .app-main #main-content,
   width: fit-content;
 }
 
-.passkey-primary-action {
+.passkey-primary-action,
+.passkey-secondary-action {
   width: 100%;
 }
 

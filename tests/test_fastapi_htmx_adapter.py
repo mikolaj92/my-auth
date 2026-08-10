@@ -135,12 +135,12 @@ def test_repository_app_factory_pin_matches_lock() -> None:
     )
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
 
-    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.19"
+    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.20"
     app_factory = next(
         package for package in lock["package"] if package["name"] == "app-factory"
     )
-    assert app_factory["version"] == "0.5.19"
-    assert "tag=v0.5.19" in app_factory["source"]["git"]
+    assert app_factory["version"] == "0.5.20"
+    assert "tag=v0.5.20" in app_factory["source"]["git"]
 
 
 def test_public_api_has_only_installer_contract() -> None:
@@ -345,6 +345,9 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert 'lang="pl"' in pl.text
     assert "Zaloguj się bez hasła" in pl.text
     assert "Kontynuuj z kluczem dostępu" in pl.text
+    assert "Zaloguj się telefonem (kod QR)" in pl.text
+    assert "Nie masz konta? Zarejestruj klucz dostępu" in pl.text
+    assert 'href="/register"' in pl.text
     assert "Sign in without a password" not in pl.text
     assert "app_lang=pl" in pl.headers.get("set-cookie", "")
     assert 'id="passkey-ui-messages"' in pl.text
@@ -355,6 +358,8 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert 'lang="en"' in en.text
     assert "Sign in without a password" in en.text
     assert "Continue with passkey" in en.text
+    assert "Sign in with a phone (QR code)" in en.text
+    assert "No account? Register a passkey" in en.text
     assert "Zaloguj się bez hasła" not in en.text
     assert "app_lang=en" in en.headers.get("set-cookie", "")
 
@@ -363,6 +368,8 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert 'lang="de"' in de.text
     assert "Ohne Passwort anmelden" in de.text
     assert "Mit Passkey fortfahren" in de.text
+    assert "Mit einem Telefon anmelden (QR-Code)" in de.text
+    assert "Noch kein Konto? Passkey registrieren" in de.text
     assert "Sign in without a password" not in de.text
     assert "app_lang=de" in de.headers.get("set-cookie", "")
 
@@ -376,6 +383,17 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert cookied_de.status_code == 200
     assert 'lang="de"' in cookied_de.text
     assert "Ohne Passwort anmelden" in cookied_de.text
+
+
+def test_phone_login_uses_native_webauthn_hybrid_hint() -> None:
+    app, _, ui = _app()
+    client = TestClient(app)
+    controller = client.get(f"{ui.static_mount_path}/passkey-ui.js").text
+    helper = client.get(f"{ui.static_mount_path}/passkey.js").text
+
+    assert 'submitPasskeyForm(form, "hybrid")' in controller
+    assert 'hint === "hybrid" ? messages.js_hybrid_prompt' in controller
+    assert "if (hint) options.hints = [hint]" in helper
 
 
 def test_login_uses_full_width_content_class_not_app_content_inner() -> None:

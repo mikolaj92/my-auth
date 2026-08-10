@@ -24,10 +24,16 @@
       hx-swap="innerHTML"
     >
       <button class="btn passkey-primary-action" data-variant="primary" type="submit">{{ t.login_submit }}</button>
+      <button class="btn passkey-secondary-action" data-variant="outline" type="button" data-passkey-hybrid>
+        {{ t.login_hybrid }}
+      </button>
     </form>
     {% set target_id = login_error_target_id %}
     {% set status_message = t.login_waiting %}
     {% include "_passkey_status.html" %}
+    <a class="btn passkey-secondary-action" data-variant="ghost" href="{{ paths.register_page }}">
+      {{ t.login_register }}
+    </a>
     <noscript>
       <p class="alert passkey-status" data-variant="destructive" role="status">
         {{ t.noscript }}

@@ -68,7 +68,11 @@ async function postJSON(url, body, fetchOptions = {}) {
     headers: { ...jsonHeaders, ...(fetchOptions.headers || {}) },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`${url} failed: ${response.status}`);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const detail = typeof payload?.detail === "string" ? payload.detail : null;
+    throw new Error(detail || `${url} failed: ${response.status}`);
+  }
   return response.json();
 }
 
@@ -103,9 +107,11 @@ export async function registerPasskey({
 export async function loginPasskey({
   optionsUrl = "/api/auth/login/options",
   verifyUrl = "/api/auth/login/verify",
+  hint,
   fetchOptions = {},
 } = {}) {
   const options = await postJSON(optionsUrl, {}, fetchOptions);
+  if (hint) options.hints = [hint];
   const credential = await navigator.credentials.get({ publicKey: parseRequestOptions(options) });
   return postJSON(verifyUrl, serializeCredential(credential), fetchOptions);
 }
