@@ -7,7 +7,7 @@ from typing import Literal, cast
 
 from .passkeys import PASSKEY_SQLITE_CHALLENGE_SCHEMA, PASSKEY_SQLITE_SCHEMA
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 class SQLiteSchemaError(RuntimeError):
@@ -81,6 +81,8 @@ _CANONICAL_COLUMNS: dict[str, tuple[tuple[str, str, int, int, object], ...]] = {
         ("user_handle", "TEXT", 0, 0, None),
         ("user_name", "TEXT", 0, 0, None),
         ("user_display_name", "TEXT", 0, 0, None),
+        ("registration_kind", "TEXT", 0, 0, None),
+        ("capability_id", "TEXT", 0, 0, None),
     ),
 }
 
@@ -127,6 +129,37 @@ def _canonical_layout_diagnostics(
     ):
         diagnostics.append("missing unique index (passkey_users.user_handle)")
 
+    foreign_keys = [
+        tuple(row[2:7])
+        for row in _fetchall(
+            connection.execute("PRAGMA foreign_key_list(passkey_credentials)")
+        )
+    ]
+    if foreign_keys != [
+        ("passkey_users", "user_id", "user_id", "NO ACTION", "CASCADE")
+    ]:
+        diagnostics.append("divergent foreign key (passkey_credentials.user_id)")
+    return tuple(diagnostics)
+
+
+def _v2_layout_diagnostics(connection: sqlite3.Connection) -> tuple[str, ...]:
+    diagnostics: list[str] = []
+    indexes = {
+        (str(row[1]), _as_int(row[2]))
+        for row in _fetchall(
+            connection.execute("PRAGMA index_list(passkey_credentials)")
+        )
+    }
+    if ("idx_passkey_credentials_user_id", 0) not in indexes:
+        diagnostics.append("missing index (idx_passkey_credentials_user_id)")
+    challenge_indexes = {
+        (str(row[1]), _as_int(row[2]))
+        for row in _fetchall(
+            connection.execute("PRAGMA index_list(passkey_challenges)")
+        )
+    }
+    if ("idx_passkey_challenges_expires_at", 0) not in challenge_indexes:
+        diagnostics.append("missing index (idx_passkey_challenges_expires_at)")
     foreign_keys = [
         tuple(row[2:7])
         for row in _fetchall(
@@ -225,9 +258,6 @@ def inspect_sqlite_schema(connection: sqlite3.Connection) -> SQLiteSchemaInspect
             return SQLiteSchemaInspection("unsupported", diagnostics=diagnostics)
         return SQLiteSchemaInspection("canonical_unversioned")
 
-    diagnostics = _canonical_layout_diagnostics(connection)
-    if diagnostics:
-        return SQLiteSchemaInspection("unsupported", diagnostics=diagnostics)
     version_rows = _fetchall(
         connection.execute("SELECT schema_version FROM my_auth_schema")
     )
@@ -242,7 +272,38 @@ def inspect_sqlite_schema(connection: sqlite3.Connection) -> SQLiteSchemaInspect
             "unsupported", diagnostics=("schema version must be an integer",)
         )
     if version == CURRENT_SCHEMA_VERSION:
+        diagnostics = _canonical_layout_diagnostics(connection)
+        if diagnostics:
+            return SQLiteSchemaInspection("unsupported", diagnostics=diagnostics)
         return SQLiteSchemaInspection("current", version=version)
+    if version == 2:
+        expected_v2 = {
+            name: columns
+            for name, columns in _CANONICAL_COLUMNS.items()
+            if name != "passkey_challenges"
+        }
+        expected_v2["passkey_challenges"] = _CANONICAL_COLUMNS[
+            "passkey_challenges"
+        ][:-2]
+        actual_v2 = tuple(
+            (
+                str(row[1]),
+                str(row[2]).upper(),
+                _as_int(row[3]),
+                _as_int(row[5]),
+                row[4],
+            )
+            for row in _fetchall(
+                connection.execute("PRAGMA table_info(passkey_challenges)")
+            )
+        )
+        if actual_v2 == expected_v2["passkey_challenges"]:
+            diagnostics = _v2_layout_diagnostics(connection)
+            if diagnostics:
+                return SQLiteSchemaInspection("unsupported", diagnostics=diagnostics)
+            return SQLiteSchemaInspection(
+                "legacy", version=2, diagnostics=("schema v2",)
+            )
     return SQLiteSchemaInspection(
         "unsupported",
         version=version,
@@ -357,6 +418,24 @@ def migrate_sqlite_schema(
         raise UnsupportedSQLiteSchema(
             f"cannot migrate schema: {'; '.join(state.diagnostics)}"
         )
+    if state.version == 2:
+        try:
+            if transaction_mode == "standalone":
+                _ = connection.execute("BEGIN IMMEDIATE")
+            _ = connection.execute(
+                "ALTER TABLE passkey_challenges ADD COLUMN registration_kind TEXT"
+            )
+            _ = connection.execute(
+                "ALTER TABLE passkey_challenges ADD COLUMN capability_id TEXT"
+            )
+            _ = connection.execute("UPDATE my_auth_schema SET schema_version=3")
+            if transaction_mode == "standalone":
+                connection.commit()
+        except Exception:
+            if transaction_mode == "standalone":
+                connection.rollback()
+            raise
+        return inspect_sqlite_schema(connection)
     try:
         if transaction_mode == "standalone":
             _ = connection.execute("BEGIN IMMEDIATE")
@@ -367,7 +446,7 @@ def migrate_sqlite_schema(
             "CREATE TABLE passkey_credentials_v2 (credential_id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES passkey_users_v2(user_id) ON DELETE CASCADE, public_key BLOB NOT NULL, sign_count INTEGER NOT NULL DEFAULT 0, transports TEXT, device_type TEXT, backed_up INTEGER, label TEXT, created_at TEXT NOT NULL)"
         )
         _ = connection.execute(
-            "CREATE TABLE passkey_challenges_v2 (key TEXT NOT NULL, kind TEXT NOT NULL, challenge BLOB NOT NULL, expires_at TEXT NOT NULL, user_id TEXT, user_handle TEXT, user_name TEXT, user_display_name TEXT, PRIMARY KEY (key, kind))"
+            "CREATE TABLE passkey_challenges_v2 (key TEXT NOT NULL, kind TEXT NOT NULL, challenge BLOB NOT NULL, expires_at TEXT NOT NULL, user_id TEXT, user_handle TEXT, user_name TEXT, user_display_name TEXT, registration_kind TEXT, capability_id TEXT, PRIMARY KEY (key, kind))"
         )
         for row in _fetchall(
             connection.execute(
@@ -429,7 +508,8 @@ def migrate_sqlite_schema(
             values = list(row)
             values[5] = _b64(values[5])
             _ = connection.execute(
-                "INSERT INTO passkey_challenges_v2 VALUES(?,?,?,?,?,?,?,?)", values
+                "INSERT INTO passkey_challenges_v2 VALUES(?,?,?,?,?,?,?,?,?,?)",
+                [*values, None, None],
             )
         source_counts: dict[str, int] = {}
         for table in ("passkey_users", "passkey_credentials", "passkey_challenges"):
@@ -472,7 +552,7 @@ def migrate_sqlite_schema(
         _ = connection.execute(
             "CREATE TABLE my_auth_schema (schema_version INTEGER NOT NULL)"
         )
-        _ = connection.execute("INSERT INTO my_auth_schema VALUES (2)")
+        _ = connection.execute("INSERT INTO my_auth_schema VALUES (3)")
         if _fetchone(connection.execute("PRAGMA foreign_key_check")) is not None:
             raise SQLiteSchemaError("foreign key check failed during migration")
         if transaction_mode == "standalone":

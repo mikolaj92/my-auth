@@ -28,6 +28,9 @@ from webauthn.helpers.structs import (
 )
 
 ChallengeKind = Literal["registration", "authentication"]
+RegistrationKind = Literal[
+    "bootstrap", "invitation", "additional_credential", "recovery"
+]
 
 
 class ChallengeNotFound(Exception): ...
@@ -177,12 +180,55 @@ class PasskeyCredential:
 
 
 @dataclass(frozen=True)
+class RegistrationContext:
+    kind: RegistrationKind
+    user: PasskeyUser
+    capability_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind in {"invitation", "recovery"} and not self.capability_id:
+            raise ValueError(f"{self.kind} registration requires a capability")
+        if self.kind in {"bootstrap", "additional_credential"} and self.capability_id:
+            raise ValueError(f"{self.kind} registration cannot use a capability")
+
+
+def registration_context_from_capability(
+    *,
+    kind: Literal["invitation", "recovery"],
+    user: PasskeyUser,
+    capability_id: str,
+    capability_subject: str,
+    capability_purpose: Literal["invitation", "account_recovery"],
+) -> RegistrationContext:
+    expected_purpose = "invitation" if kind == "invitation" else "account_recovery"
+    if capability_subject != user.user_id or capability_purpose != expected_purpose:
+        raise ValueError("capability does not match registration subject or purpose")
+    return RegistrationContext(
+        kind=kind,
+        user=user,
+        capability_id=capability_id,
+    )
+
+
+@dataclass(frozen=True)
 class ChallengeRecord:
     challenge: bytes
     kind: ChallengeKind
     key: str
     expires_at: datetime
     user: PasskeyUser | None = None
+    registration_kind: RegistrationKind | None = None
+    capability_id: str | None = None
+
+    @property
+    def registration_context(self) -> RegistrationContext | None:
+        if self.user is None or self.registration_kind is None:
+            return None
+        return RegistrationContext(
+            kind=self.registration_kind,
+            user=self.user,
+            capability_id=self.capability_id,
+        )
 
 
 @dataclass(frozen=True)
@@ -195,6 +241,7 @@ class AuthenticationResult:
 class VerifiedRegistration:
     user: PasskeyUser
     credential: PasskeyCredential
+    context: RegistrationContext | None = None
 
 
 class CredentialStore(Protocol):
@@ -232,6 +279,7 @@ class ChallengeStore(Protocol):
         challenge: bytes,
         ttl_seconds: int,
         user: PasskeyUser | None = None,
+        registration_context: RegistrationContext | None = None,
     ) -> ChallengeRecord: ...
     def pop(self, *, key: str, kind: ChallengeKind) -> ChallengeRecord: ...
 
@@ -250,12 +298,16 @@ CREATE INDEX IF NOT EXISTS idx_passkey_credentials_user_id ON passkey_credential
 PASSKEY_SQLITE_CHALLENGE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS passkey_challenges (
  key TEXT NOT NULL, kind TEXT NOT NULL, challenge BLOB NOT NULL, expires_at TEXT NOT NULL,
- user_id TEXT, user_handle TEXT, user_name TEXT, user_display_name TEXT, PRIMARY KEY (key, kind)
+ user_id TEXT, user_handle TEXT, user_name TEXT, user_display_name TEXT,
+ registration_kind TEXT, capability_id TEXT, PRIMARY KEY (key, kind)
 );
 CREATE INDEX IF NOT EXISTS idx_passkey_challenges_expires_at ON passkey_challenges(expires_at);
 """
 _CREDENTIAL_COLUMNS = "credential_id, user_id, public_key, sign_count, transports, device_type, backed_up, label, created_at"
-_CHALLENGE_COLUMNS = "challenge, kind, key, expires_at, user_id, user_handle, user_name, user_display_name"
+_CHALLENGE_COLUMNS = (
+    "challenge, kind, key, expires_at, user_id, user_handle, user_name, "
+    "user_display_name, registration_kind, capability_id"
+)
 
 
 class MemoryChallengeStore:
@@ -271,9 +323,20 @@ class MemoryChallengeStore:
         challenge: bytes,
         ttl_seconds: int,
         user: PasskeyUser | None = None,
+        registration_context: RegistrationContext | None = None,
     ) -> ChallengeRecord:
+        if registration_context is not None:
+            if kind != "registration" or user not in {None, registration_context.user}:
+                raise ValueError("registration context does not match challenge")
+            user = registration_context.user
         record = ChallengeRecord(
-            challenge, kind, key, self._now() + timedelta(seconds=ttl_seconds), user
+            challenge,
+            kind,
+            key,
+            self._now() + timedelta(seconds=ttl_seconds),
+            user,
+            registration_context.kind if registration_context else None,
+            registration_context.capability_id if registration_context else None,
         )
         self._records[(key, kind)] = record
         return record
@@ -440,7 +503,13 @@ def _sqlite_challenge(row: Any) -> ChallengeRecord:
         else PasskeyUser(row[4], b64url_to_bytes(row[5]), row[6], row[7])
     )
     return ChallengeRecord(
-        bytes(row[0]), row[1], row[2], datetime.fromisoformat(row[3]), user
+        bytes(row[0]),
+        row[1],
+        row[2],
+        datetime.fromisoformat(row[3]),
+        user,
+        row[8],
+        row[9],
     )
 
 
@@ -455,6 +524,8 @@ def _sqlite_challenge_values(r: ChallengeRecord) -> tuple[Any, ...]:
         bytes_to_b64url(u.user_handle) if u else None,
         u.name if u else None,
         u.display_name if u else None,
+        r.registration_kind,
+        r.capability_id,
     )
 
 
@@ -573,17 +644,24 @@ class SQLiteChallengeStore(_SQLiteBase):
         challenge: bytes,
         ttl_seconds: int,
         user: PasskeyUser | None = None,
+        registration_context: RegistrationContext | None = None,
     ) -> ChallengeRecord:
+        if registration_context is not None:
+            if kind != "registration" or user not in {None, registration_context.user}:
+                raise ValueError("registration context does not match challenge")
+            user = registration_context.user
         record = ChallengeRecord(
             challenge,
             kind,
             key,
             _utc(self._now() + timedelta(seconds=ttl_seconds)),
             user,
+            registration_context.kind if registration_context else None,
+            registration_context.capability_id if registration_context else None,
         )
         with self._connection(mutation=True) as conn:
             conn.execute(
-                "INSERT INTO passkey_challenges(key,kind,challenge,expires_at,user_id,user_handle,user_name,user_display_name) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(key,kind) DO UPDATE SET challenge=excluded.challenge,expires_at=excluded.expires_at,user_id=excluded.user_id,user_handle=excluded.user_handle,user_name=excluded.user_name,user_display_name=excluded.user_display_name",
+                "INSERT INTO passkey_challenges(key,kind,challenge,expires_at,user_id,user_handle,user_name,user_display_name,registration_kind,capability_id) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(key,kind) DO UPDATE SET challenge=excluded.challenge,expires_at=excluded.expires_at,user_id=excluded.user_id,user_handle=excluded.user_handle,user_name=excluded.user_name,user_display_name=excluded.user_display_name,registration_kind=excluded.registration_kind,capability_id=excluded.capability_id",
                 _sqlite_challenge_values(record),
             )
         return record
@@ -803,7 +881,20 @@ class PasskeyService:
     ) -> None:
         self.config, self.challenges, self.credentials = config, challenges, credentials
 
-    def begin_registration(self, *, flow_id: str, user: PasskeyUser) -> dict[str, Any]:
+    def begin_registration(
+        self,
+        *,
+        flow_id: str,
+        user: PasskeyUser | None = None,
+        context: RegistrationContext | None = None,
+    ) -> dict[str, Any]:
+        if context is None:
+            if user is None:
+                raise ValueError("registration user or context is required")
+            context = RegistrationContext(kind="bootstrap", user=user)
+        elif user is not None and user != context.user:
+            raise ValueError("registration user does not match context")
+        user = context.user
         existing = [
             PublicKeyCredentialDescriptor(id=c.credential_id)
             for c in self.credentials.list_credentials_for_user(user.user_id)
@@ -827,6 +918,7 @@ class PasskeyService:
             challenge=options.challenge,
             ttl_seconds=self.config.challenge_ttl_seconds,
             user=user,
+            registration_context=context,
         )
         return _json_options(options)
 
@@ -858,7 +950,7 @@ class PasskeyService:
             _enum_value(getattr(verified, "credential_device_type", None)),
             getattr(verified, "credential_backed_up", None),
         )
-        return VerifiedRegistration(record.user, passkey)
+        return VerifiedRegistration(record.user, passkey, record.registration_context)
 
     def begin_authentication(
         self,
