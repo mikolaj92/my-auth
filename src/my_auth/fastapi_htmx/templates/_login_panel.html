@@ -32,7 +32,7 @@
     {% set status_message = t.login_waiting %}
     {% include "_passkey_status.html" %}
     {% if show_registration_link %}
-      <a class="btn passkey-secondary-action" data-variant="ghost" href="{{ paths.register_page }}">
+      <a class="btn passkey-secondary-action" data-variant="ghost" href="{{ registration_link_url }}">
         {{ t.login_register }}
       </a>
     {% endif %}

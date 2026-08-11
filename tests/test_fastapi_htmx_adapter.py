@@ -317,6 +317,34 @@ def test_host_can_hide_anonymous_registration_link() -> None:
     assert 'href="/register"' not in login.text
 
 
+def test_host_can_replace_anonymous_registration_link_target() -> None:
+    app = FastAPI()
+    platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        app,
+        environments=[],
+        static_path=platform.static_path,
+        mount_name=platform.mount_name,
+    )
+    install_passkey_ui(
+        app,
+        platform=platform,
+        service=_service(),
+        hooks=_hooks(),
+        config=PasskeyUiConfig(
+            registration_link_url=lambda _request: "/passkey/recovery"
+        ),
+    )
+
+    login = TestClient(app).get("/login")
+
+    assert login.status_code == 200
+    assert 'href="/passkey/recovery"' in login.text
+    assert 'href="/register"' not in login.text
+
+
 def test_installed_ui_renders_packaged_account_registration_panel() -> None:
     _, _, ui = _app()
     request = Request(

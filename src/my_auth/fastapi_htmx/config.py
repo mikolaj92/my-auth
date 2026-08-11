@@ -31,6 +31,9 @@ class PasskeyUiConfig:
     show_registration_link: Callable[[Request], MaybeAwaitable[bool]] = (
         lambda _request: True
     )
+    registration_link_url: Callable[[Request], MaybeAwaitable[str | None]] = (
+        lambda _request: None
+    )
     login_error_target_id: str = "passkey-login-status"
     register_error_target_id: str = "passkey-register-status"
     # When set, ?lang= / cookie is applied to login/register chrome and persisted.
