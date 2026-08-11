@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, TypeVar
 
@@ -9,6 +10,8 @@ from app_factory.jinja import configure_jinja_env
 from fastapi import Request
 from jinja2 import ChoiceLoader, Environment, PackageLoader, select_autoescape
 from starlette.responses import HTMLResponse, Response
+
+from my_auth.passkeys import PasskeyCredential
 
 from .config import MaybeAwaitable, PasskeyUiConfig
 from .i18n import ui_copy
@@ -26,6 +29,16 @@ class PasskeyTemplateRenderer:
 
     async def render_register(self, request: Request, *, bootstrap: bool) -> Response:
         return await self._render("register.html", request, bootstrap=bootstrap)
+
+    async def render_credential_management(
+        self, request: Request, *, credentials: Sequence[PasskeyCredential]
+    ) -> Response:
+        return await self._render(
+            "credential_management.html",
+            request,
+            bootstrap=False,
+            credentials=list(credentials),
+        )
 
     async def render_capability_registration(
         self,
@@ -56,6 +69,7 @@ class PasskeyTemplateRenderer:
         bootstrap: bool,
         registration_kind: Literal["invitation", "recovery"] | None = None,
         capability: str | None = None,
+        credentials: list[PasskeyCredential] | None = None,
     ) -> str:
         static_base = self.config.static_url_path.rstrip("/")
         csrf_token = await _maybe_await(self.config.csrf_token(request))
@@ -81,6 +95,7 @@ class PasskeyTemplateRenderer:
             registration_kind=registration_kind,
             capability=capability if capability_valid else None,
             capability_valid=capability_valid,
+            credentials=credentials or [],
             show_registration_link=await _maybe_await(
                 self.config.show_registration_link(request)
             ),
@@ -106,6 +121,7 @@ class PasskeyTemplateRenderer:
         bootstrap: bool,
         registration_kind: Literal["invitation", "recovery"] | None = None,
         capability: str | None = None,
+        credentials: list[PasskeyCredential] | None = None,
     ) -> Response:
         content = await self._render_content(
             template_name,
@@ -113,6 +129,7 @@ class PasskeyTemplateRenderer:
             bootstrap=bootstrap,
             registration_kind=registration_kind,
             capability=capability,
+            credentials=credentials,
         )
         lang = _resolve_locale(request, self.config)
         response = HTMLResponse(content)

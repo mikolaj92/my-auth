@@ -24,6 +24,7 @@ from my_auth import (
     MemoryChallengeStore,
     MemoryCredentialStore,
     PasskeyConfig,
+    PasskeyCredential,
     PasskeyService,
     PasskeyUser,
     VerifiedRegistration,
@@ -397,6 +398,65 @@ def test_capability_pages_support_locale_and_request_aware_success_redirects() -
     assert 'data-success-url="/welcome"' in activation.text
     assert "Odzyskaj dostęp" in recovery.text
     assert 'data-success-url="/login?recovered=1"' in recovery.text
+
+
+def test_authenticated_credential_page_is_owner_scoped_and_mutable() -> None:
+    app = FastAPI()
+    platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        app,
+        environments=[],
+        static_path=platform.static_path,
+        mount_name=platform.mount_name,
+    )
+    user = PasskeyUser("owner", b"owner-handle", "owner")
+    other = PasskeyUser("other", b"other-handle", "other")
+    store = MemoryCredentialStore()
+    for subject, credential_id in ((user, b"first"), (user, b"second"), (other, b"other")):
+        store.save_registration(
+            VerifiedRegistration(
+                subject,
+                PasskeyCredential(credential_id, subject.user_id, b"key-" + credential_id),
+            )
+        )
+    service = PasskeyService(
+        config=PasskeyConfig(
+            rp_id="localhost", rp_name="Demo", origin="http://localhost"
+        ),
+        challenges=MemoryChallengeStore(),
+        credentials=store,
+    )
+    hooks = _hooks()
+    hooks = dataclasses.replace(hooks, get_session_user=lambda _request: user)
+    install_passkey_ui(
+        app, platform=platform, service=service, hooks=hooks, config=PasskeyUiConfig()
+    )
+    client = TestClient(app)
+
+    page = client.get("/account/passkeys")
+    assert page.status_code == 200
+    assert "Zmlyc3Q" in page.text and "c2Vjb25k" in page.text
+    assert "b3RoZXI" not in page.text
+    labeled = client.post(
+        "/api/auth/credentials/Zmlyc3Q/label", json={"label": "Laptop"}
+    )
+    assert labeled.status_code == 200
+    assert "Laptop" in labeled.text
+    assert client.post(
+        "/api/auth/credentials/b3RoZXI/label", json={"label": "No"}
+    ).status_code == 404
+    assert client.delete("/api/auth/credentials/c2Vjb25k").status_code == 200
+    final = client.delete("/api/auth/credentials/Zmlyc3Q")
+    assert final.status_code == 409
+    assert "final passkey credential" in final.json()["detail"]
+
+
+def test_credential_page_requires_authentication() -> None:
+    app, _, _ = _app()
+    client = TestClient(app)
+    assert client.get("/account/passkeys").status_code == 401
 
 
 def test_installed_ui_renders_packaged_account_registration_panel() -> None:

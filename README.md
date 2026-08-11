@@ -186,6 +186,15 @@ value to the adapter. The installer is idempotent for the same platform and
 configuration, and rejects conflicting setup; hosts do not manually include
 the router or mount package static files.
 
+Authenticated credential management is available at `GET /account/passkeys`.
+The shared page lists only credentials owned by `get_session_user`, links to the
+existing session-derived additional-credential registration, and exposes
+owner-scoped label and removal actions. Removal preserves the final credential
+atomically by default. A host may provide `allow_final_credential_removal` only
+when its explicit recovery policy makes credentialless account state safe.
+Labels are trimmed and limited to 80 characters; credential public keys and
+other sensitive registration data are never rendered.
+
 ## Ownership matrix
 
 | Concern | Owner |
