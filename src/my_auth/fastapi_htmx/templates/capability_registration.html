@@ -1,0 +1,71 @@
+{% extends "app_factory/shell.html" %}
+
+{% set is_activation = registration_kind == "invitation" %}
+{% set page_title = t.activation_page_title if is_activation else t.recovery_page_title %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block head_extra %}
+  <link rel="stylesheet" href="{{ passkey_css_url }}">
+{% endblock %}
+
+{% block content_class %}passkey-content{% endblock %}
+{% block loading_label %}{{ t.loading }}{% endblock %}
+
+{% block content %}
+  <div class="passkey-shell">
+    <section class="card passkey-card" aria-labelledby="passkey-page-title">
+      <header class="passkey-card__header">
+        <p class="badge passkey-eyebrow" data-variant="secondary">
+          {{ t.activation_eyebrow if is_activation else t.recovery_eyebrow }}
+        </p>
+        <h1 id="passkey-page-title" class="card-title">
+          {{ t.activation_heading if is_activation else t.recovery_heading }}
+        </h1>
+        <p class="card-description">
+          {{ t.activation_description if is_activation else t.recovery_description }}
+        </p>
+      </header>
+      <section class="passkey-card__content">
+        {% if capability_valid %}
+          <form
+            id="passkey-capability-form"
+            class="passkey-form"
+            method="post"
+            action="{{ paths.register_verify }}"
+            data-passkey-form="register"
+            data-options-url="{{ paths.register_options }}"
+            data-verify-url="{{ paths.register_verify }}"
+            data-registration-kind="{{ registration_kind }}"
+            data-capability="{{ capability }}"
+            data-status-target="{{ register_error_target_id }}"
+            data-csrf-header="{{ csrf_header_name }}"
+            {% if csrf_token %}data-csrf-token="{{ csrf_token }}"{% endif %}
+            {% if register_success_url %}data-success-url="{{ register_success_url }}"{% endif %}
+            hx-target="#{{ register_error_target_id }}"
+            hx-swap="innerHTML"
+          >
+            <button class="btn passkey-primary-action" data-variant="primary" type="submit">
+              {{ t.activation_submit if is_activation else t.recovery_submit }}
+            </button>
+          </form>
+          {% set target_id = register_error_target_id %}
+          {% set status_message = t.activation_waiting if is_activation else t.recovery_waiting %}
+          {% include "_passkey_status.html" %}
+        {% else %}
+          <div id="{{ register_error_target_id }}" class="alert passkey-status" data-variant="destructive" role="alert">
+            {{ t.capability_unavailable }}
+          </div>
+        {% endif %}
+        <noscript>
+          <p class="alert passkey-status" data-variant="destructive" role="status">{{ t.noscript }}</p>
+        </noscript>
+      </section>
+    </section>
+  </div>
+{% endblock %}
+
+{% block body_end %}
+  <script type="application/json" id="passkey-ui-messages">{{ t_json | safe }}</script>
+  <script type="module" src="{{ passkey_js_url }}"></script>
+{% endblock %}

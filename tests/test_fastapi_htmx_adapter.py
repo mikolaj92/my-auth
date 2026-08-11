@@ -345,6 +345,60 @@ def test_host_can_replace_anonymous_registration_link_target() -> None:
     assert 'href="/register"' not in login.text
 
 
+def test_installed_ui_renders_distinct_activation_and_recovery_pages() -> None:
+    app, _, ui = _app()
+    client = TestClient(app)
+
+    activation = client.get("/activate?capability=invite-token")
+    recovery = client.get("/recover?capability=recovery-token")
+    invalid = client.get("/recover")
+
+    assert activation.status_code == recovery.status_code == invalid.status_code == 200
+    assert "Activate your account" in activation.text
+    assert 'data-registration-kind="invitation"' in activation.text
+    assert 'data-capability="invite-token"' in activation.text
+    assert "Recover access" in recovery.text
+    assert 'data-registration-kind="recovery"' in recovery.text
+    assert 'data-capability="recovery-token"' in recovery.text
+    assert "invalid or no longer available" in invalid.text
+    assert 'data-capability=' not in invalid.text
+    controller = client.get(f"{ui.static_mount_path}/passkey-ui.js").text
+    helper = client.get(f"{ui.static_mount_path}/passkey.js").text
+    assert "registrationKind" in controller
+    assert "registration_kind" in helper
+
+
+def test_capability_pages_support_locale_and_request_aware_success_redirects() -> None:
+    app = FastAPI()
+    platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        app,
+        environments=[],
+        static_path=platform.static_path,
+        mount_name=platform.mount_name,
+    )
+    install_passkey_ui(
+        app,
+        platform=platform,
+        service=_service(),
+        hooks=_hooks(),
+        config=PasskeyUiConfig(
+            default_locale="pl",
+            activation_success_url="/welcome",
+            recovery_success_url="/login?recovered=1",
+        ),
+    )
+    client = TestClient(app)
+    activation = client.get("/activate?capability=token")
+    recovery = client.get("/recover?capability=token")
+    assert "Aktywuj konto" in activation.text
+    assert 'data-success-url="/welcome"' in activation.text
+    assert "Odzyskaj dostęp" in recovery.text
+    assert 'data-success-url="/login?recovered=1"' in recovery.text
+
+
 def test_installed_ui_renders_packaged_account_registration_panel() -> None:
     _, _, ui = _app()
     request = Request(

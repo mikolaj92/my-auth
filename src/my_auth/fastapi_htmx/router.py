@@ -89,6 +89,10 @@ def install_passkey_ui(
         after_register=hooks.after_register,
         after_login=hooks.after_login,
         prepare_registration_context=hooks.prepare_registration_context,
+        prepare_capability_registration_context=(
+            hooks.prepare_capability_registration_context
+        ),
+        render_capability_registration=renderer.render_capability_registration,
     )
     auth_router = PasskeyAuthRouter(
         service=service,

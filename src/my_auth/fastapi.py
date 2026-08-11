@@ -40,6 +40,16 @@ class RenderRegister(Protocol):
     ) -> MaybeAwaitable[Response]: ...
 
 
+class RenderCapabilityRegistration(Protocol):
+    def __call__(
+        self,
+        request: Request,
+        *,
+        kind: Literal["invitation", "recovery"],
+        capability: str | None,
+    ) -> MaybeAwaitable[Response]: ...
+
+
 class _PasskeyServiceAPI(Protocol):
     config: PasskeyConfig
 
@@ -75,6 +85,8 @@ class _PasskeyServiceAPI(Protocol):
 class PasskeyPaths:
     login_page: str = "/login"
     register_page: str = "/register"
+    activation_page: str = "/activate"
+    recovery_page: str = "/recover"
     logout: str = "/logout"
     login_options: str = "/api/auth/login/options"
     login_verify: str = "/api/auth/login/verify"
@@ -114,6 +126,11 @@ class PasskeyRouteHooks:
     prepare_registration_context: Callable[
         [Request, str, str], MaybeAwaitable[RegistrationContext]
     ] | None = None
+    prepare_capability_registration_context: Callable[
+        [Request, str, Literal["invitation", "recovery"], str],
+        MaybeAwaitable[RegistrationContext],
+    ] | None = None
+    render_capability_registration: RenderCapabilityRegistration | None = None
 
 
 PasskeyFastAPIHooks = PasskeyRouteHooks
@@ -146,6 +163,12 @@ class PasskeyFastAPISettings:
                 login_page=_env(env, prefix, "LOGIN_PAGE", PasskeyPaths.login_page),
                 register_page=_env(
                     env, prefix, "REGISTER_PAGE", PasskeyPaths.register_page
+                ),
+                activation_page=_env(
+                    env, prefix, "ACTIVATION_PAGE", PasskeyPaths.activation_page
+                ),
+                recovery_page=_env(
+                    env, prefix, "RECOVERY_PAGE", PasskeyPaths.recovery_page
                 ),
                 logout=_env(env, prefix, "LOGOUT_PATH", PasskeyPaths.logout),
                 login_options=_env(
@@ -232,6 +255,13 @@ class PasskeyAuthRouter:
         self.router.add_api_route(
             self.paths.register_page, self.register_page, methods=["GET"]
         )
+        if self.hooks.render_capability_registration is not None:
+            self.router.add_api_route(
+                self.paths.activation_page, self.activation_page, methods=["GET"]
+            )
+            self.router.add_api_route(
+                self.paths.recovery_page, self.recovery_page, methods=["GET"]
+            )
         self.router.add_api_route(self.paths.logout, self.logout, methods=["POST"])
         self.router.add_api_route(
             self.paths.login_options, self.login_options, methods=["POST"]
@@ -253,6 +283,23 @@ class PasskeyAuthRouter:
         user = await _maybe_await(self.hooks.get_session_user(request))
         return await _maybe_await(
             self.hooks.render_register(request, bootstrap=user is None)
+        )
+
+    async def activation_page(self, request: Request) -> Response:
+        return await self._capability_registration_page(request, kind="invitation")
+
+    async def recovery_page(self, request: Request) -> Response:
+        return await self._capability_registration_page(request, kind="recovery")
+
+    async def _capability_registration_page(
+        self, request: Request, *, kind: Literal["invitation", "recovery"]
+    ) -> Response:
+        renderer = self.hooks.render_capability_registration
+        if renderer is None:
+            raise HTTPException(status_code=404, detail="not found")
+        capability = request.query_params.get("capability")
+        return await _maybe_await(
+            renderer(request, kind=kind, capability=capability)
         )
 
     async def login_options(self) -> Response:
@@ -296,16 +343,44 @@ class PasskeyAuthRouter:
                 kind="additional_credential", user=session_user
             )
         else:
-            username = _registration_username(await _json_body(request))
-            if self.hooks.prepare_registration_context is not None:
-                context = await _maybe_await(
-                    self.hooks.prepare_registration_context(request, flow_id, username)
-                )
+            body = await _json_body(request)
+            capability_flow = _capability_registration(body)
+            if capability_flow is not None:
+                resolver = self.hooks.prepare_capability_registration_context
+                if resolver is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="enrollment capability is unavailable",
+                    )
+                kind, capability = capability_flow
+                try:
+                    context = await _maybe_await(
+                        resolver(request, flow_id, kind, capability)
+                    )
+                except Exception as error:
+                    logger.info("capability registration was rejected")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="enrollment capability is unavailable",
+                    ) from error
+                if context.kind != kind:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="enrollment capability is unavailable",
+                    )
             else:
-                user = await _maybe_await(
-                    self.hooks.prepare_registration(request, username)
-                )
-                context = RegistrationContext(kind="bootstrap", user=user)
+                username = _registration_username(body)
+                if self.hooks.prepare_registration_context is not None:
+                    context = await _maybe_await(
+                        self.hooks.prepare_registration_context(
+                            request, flow_id, username
+                        )
+                    )
+                else:
+                    user = await _maybe_await(
+                        self.hooks.prepare_registration(request, username)
+                    )
+                    context = RegistrationContext(kind="bootstrap", user=user)
         response = JSONResponse(
             self.service.begin_registration(flow_id=flow_id, context=context)
         )
@@ -397,6 +472,20 @@ async def _json_body(request: Request) -> dict[str, object]:
     if not isinstance(value, dict):
         raise HTTPException(status_code=400, detail="JSON object body is required")
     return cast(dict[str, object], value)
+
+
+def _capability_registration(
+    body: Mapping[str, object],
+) -> tuple[Literal["invitation", "recovery"], str] | None:
+    raw_kind = body.get("registration_kind")
+    if raw_kind not in {"invitation", "recovery"}:
+        return None
+    capability = body.get("capability")
+    if not isinstance(capability, str) or not capability.strip():
+        raise HTTPException(
+            status_code=400, detail="enrollment capability is unavailable"
+        )
+    return cast(Literal["invitation", "recovery"], raw_kind), capability.strip()
 
 
 def _registration_username(body: Mapping[str, object]) -> str:
