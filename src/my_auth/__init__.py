@@ -1,3 +1,12 @@
+from .enrollment import (
+    EnrollmentCapability,
+    EnrollmentCapabilityNotFound,
+    EnrollmentCapabilityStore,
+    EnrollmentPurpose,
+    IssuedEnrollmentCapability,
+    MemoryEnrollmentCapabilityStore,
+    SQLiteEnrollmentCapabilityStore,
+)
 from .passkeys import (
     AuthenticationResult,
     ChallengeNotFound,
@@ -35,6 +44,13 @@ from .testing import assert_challenge_store_contract, assert_credential_store_co
 
 __all__ = [
     "AuthenticationResult",
+    "EnrollmentCapability",
+    "EnrollmentCapabilityNotFound",
+    "EnrollmentCapabilityStore",
+    "EnrollmentPurpose",
+    "IssuedEnrollmentCapability",
+    "MemoryEnrollmentCapabilityStore",
+    "SQLiteEnrollmentCapabilityStore",
     "ChallengeNotFound",
     "ChallengeRecord",
     "ChallengeStore",
