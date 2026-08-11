@@ -32,6 +32,19 @@ _COPY: dict[str, dict[str, str]] = {
         "register_display_name_placeholder": "Your name",
         "register_submit": "Create passkey",
         "register_waiting": "Waiting for registration details.",
+        "activation_page_title": "Activate your account",
+        "activation_eyebrow": "Account invitation",
+        "activation_heading": "Activate your account",
+        "activation_description": "Create a passkey for the account in this invitation.",
+        "activation_submit": "Activate account",
+        "activation_waiting": "Waiting for account activation.",
+        "recovery_page_title": "Recover account access",
+        "recovery_eyebrow": "Account recovery",
+        "recovery_heading": "Recover access",
+        "recovery_description": "Create a new passkey for the account bound to this recovery link.",
+        "recovery_submit": "Recover access",
+        "recovery_waiting": "Waiting for account recovery.",
+        "capability_unavailable": "This link is invalid or no longer available. Request a new link.",
         "noscript": (
             "WebAuthn passkeys require JavaScript and a browser with "
             "PublicKeyCredential support."
@@ -80,6 +93,19 @@ _COPY: dict[str, dict[str, str]] = {
         "register_display_name_placeholder": "Twoje imię i nazwisko",
         "register_submit": "Utwórz klucz dostępu",
         "register_waiting": "Oczekiwanie na dane rejestracji.",
+        "activation_page_title": "Aktywuj konto",
+        "activation_eyebrow": "Zaproszenie do konta",
+        "activation_heading": "Aktywuj konto",
+        "activation_description": "Utwórz klucz dostępu dla konta wskazanego w zaproszeniu.",
+        "activation_submit": "Aktywuj konto",
+        "activation_waiting": "Oczekiwanie na aktywację konta.",
+        "recovery_page_title": "Odzyskaj dostęp do konta",
+        "recovery_eyebrow": "Odzyskiwanie konta",
+        "recovery_heading": "Odzyskaj dostęp",
+        "recovery_description": "Utwórz nowy klucz dostępu dla konta przypisanego do tego odnośnika odzyskiwania.",
+        "recovery_submit": "Odzyskaj dostęp",
+        "recovery_waiting": "Oczekiwanie na odzyskanie dostępu.",
+        "capability_unavailable": "Ten odnośnik jest nieprawidłowy lub nie jest już dostępny. Poproś o nowy odnośnik.",
         "noscript": (
             "Klucze WebAuthn wymagają JavaScriptu oraz przeglądarki "
             "z obsługą PublicKeyCredential."
@@ -129,6 +155,19 @@ _COPY: dict[str, dict[str, str]] = {
         "register_display_name_placeholder": "Ihr Name",
         "register_submit": "Passkey erstellen",
         "register_waiting": "Warten auf Registrierungsdaten.",
+        "activation_page_title": "Konto aktivieren",
+        "activation_eyebrow": "Kontoeinladung",
+        "activation_heading": "Konto aktivieren",
+        "activation_description": "Erstellen Sie einen Passkey für das in dieser Einladung angegebene Konto.",
+        "activation_submit": "Konto aktivieren",
+        "activation_waiting": "Warten auf die Kontoaktivierung.",
+        "recovery_page_title": "Kontozugriff wiederherstellen",
+        "recovery_eyebrow": "Kontowiederherstellung",
+        "recovery_heading": "Zugriff wiederherstellen",
+        "recovery_description": "Erstellen Sie einen neuen Passkey für das mit diesem Wiederherstellungslink verknüpfte Konto.",
+        "recovery_submit": "Zugriff wiederherstellen",
+        "recovery_waiting": "Warten auf die Kontowiederherstellung.",
+        "capability_unavailable": "Dieser Link ist ungültig oder nicht mehr verfügbar. Fordern Sie einen neuen Link an.",
         "noscript": (
             "WebAuthn-Passkeys erfordern JavaScript und einen Browser "
             "mit PublicKeyCredential-Unterstützung."

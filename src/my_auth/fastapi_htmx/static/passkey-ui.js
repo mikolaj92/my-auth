@@ -80,6 +80,18 @@ async function submitLogin(form, hint) {
 }
 
 async function submitRegister(form) {
+  const registrationKind = form.dataset.registrationKind;
+  const capability = form.dataset.capability;
+  if (registrationKind && capability) {
+    await registerPasskey({
+      optionsUrl: form.dataset.optionsUrl,
+      verifyUrl: form.dataset.verifyUrl,
+      optionsBody: { registration_kind: registrationKind, capability },
+      fetchOptions: { headers: csrfHeaders(form) },
+    });
+    handleSuccess(form, "register");
+    return;
+  }
   const usernameInput = form.elements.namedItem("username");
   const displayNameInput = form.elements.namedItem("display_name");
   const username = usernameInput instanceof HTMLInputElement ? usernameInput.value.trim() : "";

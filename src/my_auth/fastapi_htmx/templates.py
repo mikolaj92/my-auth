@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 import json
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from app_factory.jinja import configure_jinja_env
 from fastapi import Request
@@ -27,6 +27,21 @@ class PasskeyTemplateRenderer:
     async def render_register(self, request: Request, *, bootstrap: bool) -> Response:
         return await self._render("register.html", request, bootstrap=bootstrap)
 
+    async def render_capability_registration(
+        self,
+        request: Request,
+        *,
+        kind: Literal["invitation", "recovery"],
+        capability: str | None,
+    ) -> Response:
+        return await self._render(
+            "capability_registration.html",
+            request,
+            bootstrap=False,
+            registration_kind=kind,
+            capability=capability,
+        )
+
     async def render_account_panel(self, request: Request) -> str:
         """Render the packaged registration UI for a signed-in account page."""
         return await self._render_content(
@@ -34,12 +49,25 @@ class PasskeyTemplateRenderer:
         )
 
     async def _render_content(
-        self, template_name: str, request: Request, *, bootstrap: bool
+        self,
+        template_name: str,
+        request: Request,
+        *,
+        bootstrap: bool,
+        registration_kind: Literal["invitation", "recovery"] | None = None,
+        capability: str | None = None,
     ) -> str:
         static_base = self.config.static_url_path.rstrip("/")
         csrf_token = await _maybe_await(self.config.csrf_token(request))
         lang = _resolve_locale(request, self.config)
         copy = dict(ui_copy(lang, default=self.config.default_locale))
+        capability_valid = bool(capability and capability.strip())
+        if registration_kind == "invitation":
+            success_url = self.config.activation_success_url
+        elif registration_kind == "recovery":
+            success_url = self.config.recovery_success_url
+        else:
+            success_url = self.config.register_success_url
         return self.environment.get_template(template_name).render(
             request=request,
             paths=self.config.paths,
@@ -49,7 +77,10 @@ class PasskeyTemplateRenderer:
             csrf_header_name=self.config.csrf_header_name,
             csrf_token=csrf_token,
             login_success_url=self.config.login_success_url,
-            register_success_url=self.config.register_success_url,
+            register_success_url=success_url,
+            registration_kind=registration_kind,
+            capability=capability if capability_valid else None,
+            capability_valid=capability_valid,
             show_registration_link=await _maybe_await(
                 self.config.show_registration_link(request)
             ),
@@ -68,10 +99,20 @@ class PasskeyTemplateRenderer:
         )
 
     async def _render(
-        self, template_name: str, request: Request, *, bootstrap: bool
+        self,
+        template_name: str,
+        request: Request,
+        *,
+        bootstrap: bool,
+        registration_kind: Literal["invitation", "recovery"] | None = None,
+        capability: str | None = None,
     ) -> Response:
         content = await self._render_content(
-            template_name, request, bootstrap=bootstrap
+            template_name,
+            request,
+            bootstrap=bootstrap,
+            registration_kind=registration_kind,
+            capability=capability,
         )
         lang = _resolve_locale(request, self.config)
         response = HTMLResponse(content)
