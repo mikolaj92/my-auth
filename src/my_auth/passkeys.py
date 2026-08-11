@@ -29,7 +29,11 @@ from webauthn.helpers.structs import (
 
 ChallengeKind = Literal["registration", "authentication"]
 RegistrationKind = Literal[
-    "bootstrap", "invitation", "additional_credential", "recovery"
+    "bootstrap",
+    "self_registration",
+    "invitation",
+    "additional_credential",
+    "recovery",
 ]
 
 
@@ -191,7 +195,11 @@ class RegistrationContext:
     def __post_init__(self) -> None:
         if self.kind in {"invitation", "recovery"} and not self.capability_id:
             raise ValueError(f"{self.kind} registration requires a capability")
-        if self.kind in {"bootstrap", "additional_credential"} and self.capability_id:
+        if self.kind in {
+            "bootstrap",
+            "self_registration",
+            "additional_credential",
+        } and self.capability_id:
             raise ValueError(f"{self.kind} registration cannot use a capability")
 
 

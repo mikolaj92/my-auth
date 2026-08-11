@@ -532,7 +532,7 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Zaloguj się bez hasła" in pl.text
     assert "Kontynuuj z kluczem dostępu" in pl.text
     assert "Zaloguj się telefonem (kod QR)" in pl.text
-    assert "Nie masz konta? Zarejestruj klucz dostępu" in pl.text
+    assert "Nie masz konta? Utwórz je" in pl.text
     assert 'href="/register"' in pl.text
     assert "Sign in without a password" not in pl.text
     assert "app_lang=pl" in pl.headers.get("set-cookie", "")
@@ -545,7 +545,7 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Sign in without a password" in en.text
     assert "Continue with passkey" in en.text
     assert "Sign in with a phone (QR code)" in en.text
-    assert "No account? Register a passkey" in en.text
+    assert "No account? Create one" in en.text
     assert "Zaloguj się bez hasła" not in en.text
     assert "app_lang=en" in en.headers.get("set-cookie", "")
 
