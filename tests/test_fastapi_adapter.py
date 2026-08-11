@@ -86,6 +86,22 @@ def test_options_use_distinct_flow_cookies() -> None:
     assert "passkey_registration_challenge=" in register.headers["set-cookie"]
 
 
+def test_anonymous_registration_is_typed_as_fresh_subject_registration() -> None:
+    client, service = _app()
+
+    response = client.post(
+        "/api/auth/register/options", json={"username": "new-account"}
+    )
+
+    assert response.status_code == 200
+    assert isinstance(service.challenges, MemoryChallengeStore)
+    flow_id = response.cookies["passkey_registration_challenge"]
+    context = service.challenges._records[(flow_id, "registration")].registration_context
+    assert context is not None
+    assert context.kind == "self_registration"
+    assert context.user.user_id == "u"
+
+
 def test_registration_requires_username_field() -> None:
     client, _ = _app()
     assert (

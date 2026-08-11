@@ -491,7 +491,9 @@ class PasskeyAuthRouter:
                     user = await _maybe_await(
                         self.hooks.prepare_registration(request, username)
                     )
-                    context = RegistrationContext(kind="bootstrap", user=user)
+                    context = RegistrationContext(
+                        kind="self_registration", user=user
+                    )
         response = JSONResponse(
             self.service.begin_registration(flow_id=flow_id, context=context)
         )

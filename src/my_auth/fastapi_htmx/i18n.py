@@ -16,21 +16,23 @@ _COPY: dict[str, dict[str, str]] = {
         ),
         "login_submit": "Continue with passkey",
         "login_hybrid": "Sign in with a phone (QR code)",
-        "login_register": "No account? Register a passkey",
+        "login_register": "No account? Create one",
         "login_waiting": "Waiting for the WebAuthn passkey prompt.",
-        "register_page_title": "Register a passkey",
-        "register_eyebrow": "Passkey registration",
-        "register_heading": "Create a passkey",
+        "register_page_title": "Create an account",
+        "register_eyebrow": "Account registration",
+        "register_heading": "Create your account",
         "register_description": (
-            "Add a passkey to the current account without changing host registration policy."
+            "Choose a username and create a passkey for your new account."
         ),
-        "register_description_bootstrap": "Start by creating a passkey for this account.",
+        "register_description_bootstrap": (
+            "Create the first account and its administrator passkey."
+        ),
         "register_username_label": "Username",
         "register_username_placeholder": "username",
         "register_username_title": "Username is required and must not contain spaces",
         "register_display_name_label": "Display name (optional)",
         "register_display_name_placeholder": "Your name",
-        "register_submit": "Create passkey",
+        "register_submit": "Create account",
         "register_waiting": "Waiting for registration details.",
         "activation_page_title": "Activate your account",
         "activation_eyebrow": "Account invitation",
@@ -84,16 +86,16 @@ _COPY: dict[str, dict[str, str]] = {
         ),
         "login_submit": "Kontynuuj z kluczem dostępu",
         "login_hybrid": "Zaloguj się telefonem (kod QR)",
-        "login_register": "Nie masz konta? Zarejestruj klucz dostępu",
+        "login_register": "Nie masz konta? Utwórz je",
         "login_waiting": "Oczekiwanie na monit WebAuthn klucza dostępu.",
-        "register_page_title": "Zarejestruj klucz dostępu",
-        "register_eyebrow": "Rejestracja klucza",
-        "register_heading": "Utwórz klucz dostępu",
+        "register_page_title": "Utwórz konto",
+        "register_eyebrow": "Rejestracja konta",
+        "register_heading": "Utwórz swoje konto",
         "register_description": (
-            "Dodaj klucz dostępu do bieżącego konta bez zmiany polityki rejestracji hosta."
+            "Wybierz nazwę użytkownika i utwórz klucz dostępu do nowego konta."
         ),
         "register_description_bootstrap": (
-            "Zacznij od utworzenia klucza dostępu dla tego konta."
+            "Utwórz pierwsze konto oraz jego klucz administratora."
         ),
         "register_username_label": "Nazwa użytkownika",
         "register_username_placeholder": "nazwa użytkownika",
@@ -102,7 +104,7 @@ _COPY: dict[str, dict[str, str]] = {
         ),
         "register_display_name_label": "Nazwa wyświetlana (opcjonalnie)",
         "register_display_name_placeholder": "Twoje imię i nazwisko",
-        "register_submit": "Utwórz klucz dostępu",
+        "register_submit": "Utwórz konto",
         "register_waiting": "Oczekiwanie na dane rejestracji.",
         "activation_page_title": "Aktywuj konto",
         "activation_eyebrow": "Zaproszenie do konta",
