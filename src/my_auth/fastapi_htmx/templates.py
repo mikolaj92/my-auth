@@ -26,10 +26,12 @@ class PasskeyTemplateRenderer:
 
     async def render_register(self, request: Request, *, bootstrap: bool) -> Response:
         return await self._render("register.html", request, bootstrap=bootstrap)
+
     async def render_account_panel(self, request: Request) -> str:
         """Render the packaged registration UI for a signed-in account page."""
-        return await self._render_content("account_panel.html", request, bootstrap=False)
-
+        return await self._render_content(
+            "account_panel.html", request, bootstrap=False
+        )
 
     async def _render_content(
         self, template_name: str, request: Request, *, bootstrap: bool
@@ -48,6 +50,9 @@ class PasskeyTemplateRenderer:
             csrf_token=csrf_token,
             login_success_url=self.config.login_success_url,
             register_success_url=self.config.register_success_url,
+            show_registration_link=await _maybe_await(
+                self.config.show_registration_link(request)
+            ),
             login_error_target_id=self.config.login_error_target_id,
             register_error_target_id=self.config.register_error_target_id,
             # Drive app-factory shell lang + flag dropdown selected state.
@@ -61,7 +66,9 @@ class PasskeyTemplateRenderer:
     async def _render(
         self, template_name: str, request: Request, *, bootstrap: bool
     ) -> Response:
-        content = await self._render_content(template_name, request, bootstrap=bootstrap)
+        content = await self._render_content(
+            template_name, request, bootstrap=bootstrap
+        )
         lang = _resolve_locale(request, self.config)
         response = HTMLResponse(content)
         cookie_name = self.config.locale_cookie_name
