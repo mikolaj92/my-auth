@@ -31,9 +31,11 @@
     {% set target_id = login_error_target_id %}
     {% set status_message = t.login_waiting %}
     {% include "_passkey_status.html" %}
-    <a class="btn passkey-secondary-action" data-variant="ghost" href="{{ paths.register_page }}">
-      {{ t.login_register }}
-    </a>
+    {% if show_registration_link %}
+      <a class="btn passkey-secondary-action" data-variant="ghost" href="{{ paths.register_page }}">
+        {{ t.login_register }}
+      </a>
+    {% endif %}
     <noscript>
       <p class="alert passkey-status" data-variant="destructive" role="status">
         {{ t.noscript }}

@@ -131,9 +131,7 @@ def _app() -> tuple[FastAPI, AppFactoryUi, PasskeyUi]:
 
 
 def test_repository_app_factory_pin_matches_lock() -> None:
-    project = tomllib.loads(
-        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    )
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
 
     assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.21"
@@ -210,11 +208,10 @@ def test_passkey_panels_use_basecoat_semantic_card_slots() -> None:
         )
         assert "<header" in body
         assert 'class="passkey-card__header"' in body or "passkey-card__header" in body
-        assert "class=\"card-header" not in body
-        assert "class=\"card-content" not in body
+        assert 'class="card-header' not in body
+        assert 'class="card-content' not in body
         assert "class='card-header" not in body
         assert "class='card-content" not in body
-
 
 
 def test_installer_is_idempotent_and_rejects_different_setup() -> None:
@@ -293,6 +290,31 @@ def test_testclient_smoke_pages_and_package_js() -> None:
         files("my_auth").joinpath("static/passkey.js").read_text()
         == package_javascript.text
     )
+
+
+def test_host_can_hide_anonymous_registration_link() -> None:
+    app = FastAPI()
+    platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        app,
+        environments=[],
+        static_path=platform.static_path,
+        mount_name=platform.mount_name,
+    )
+    install_passkey_ui(
+        app,
+        platform=platform,
+        service=_service(),
+        hooks=_hooks(),
+        config=PasskeyUiConfig(show_registration_link=lambda _request: False),
+    )
+
+    login = TestClient(app).get("/login")
+
+    assert login.status_code == 200
+    assert 'href="/register"' not in login.text
 
 
 def test_installed_ui_renders_packaged_account_registration_panel() -> None:
@@ -438,4 +460,7 @@ def test_packaged_css_forces_full_width_header_on_app_shell() -> None:
     # place-items centers only the panel, never the whole main column.
     assert ".passkey-shell" in css
     assert "place-items: center" in css
-    assert ".app-main:has(.passkey-card) {\n  display: grid;\n  place-items: center" not in css
+    assert (
+        ".app-main:has(.passkey-card) {\n  display: grid;\n  place-items: center"
+        not in css
+    )
