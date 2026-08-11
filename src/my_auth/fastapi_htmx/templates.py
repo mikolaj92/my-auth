@@ -53,6 +53,10 @@ class PasskeyTemplateRenderer:
             show_registration_link=await _maybe_await(
                 self.config.show_registration_link(request)
             ),
+            registration_link_url=(
+                await _maybe_await(self.config.registration_link_url(request))
+                or self.config.paths.register_page
+            ),
             login_error_target_id=self.config.login_error_target_id,
             register_error_target_id=self.config.register_error_target_id,
             # Drive app-factory shell lang + flag dropdown selected state.
