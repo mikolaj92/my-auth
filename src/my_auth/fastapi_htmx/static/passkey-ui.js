@@ -132,6 +132,51 @@ async function submitPasskeyForm(form, hint) {
   }
 }
 
+async function credentialMutation(element, method, body) {
+  const response = await fetch(element.dataset.url, {
+    method,
+    credentials: "same-origin",
+    headers: { "content-type": "application/json", ...csrfHeaders(element) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.detail || messages.js_request_failed);
+  }
+  await response.text();
+  window.location.reload();
+}
+
+function bindCredentialManagement(root) {
+  root.querySelectorAll("[data-passkey-credential-label]").forEach((form) => {
+    if (form.dataset.passkeyBound === "true") return;
+    form.dataset.passkeyBound = "true";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        await credentialMutation(form, "POST", {
+          label: form.elements.namedItem("label").value,
+        });
+      } catch (error) {
+        setStatus(form, error instanceof Error ? error.message : messages.js_request_failed, "error");
+      }
+    });
+  });
+  root.querySelectorAll("[data-passkey-credential-remove]").forEach((button) => {
+    if (button.dataset.passkeyBound === "true") return;
+    button.dataset.passkeyBound = "true";
+    button.addEventListener("click", async () => {
+      if (!window.confirm(messages.confirm_credential_removal)) return;
+      try {
+        await credentialMutation(button, "DELETE");
+      } catch (error) {
+        const status = document.getElementById("passkey-credential-status");
+        if (status) status.textContent = error instanceof Error ? error.message : messages.js_request_failed;
+      }
+    });
+  });
+}
+
 function bindPasskeyForm(form) {
   assertWebAuthnSupport(form);
   form.addEventListener("submit", (event) => {
@@ -143,6 +188,7 @@ function bindPasskeyForm(form) {
   });
 }
 
+bindCredentialManagement(document);
 for (const form of document.querySelectorAll("[data-passkey-form]")) {
   bindPasskeyForm(form);
 }

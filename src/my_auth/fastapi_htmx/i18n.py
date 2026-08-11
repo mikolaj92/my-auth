@@ -45,6 +45,17 @@ _COPY: dict[str, dict[str, str]] = {
         "recovery_submit": "Recover access",
         "recovery_waiting": "Waiting for account recovery.",
         "capability_unavailable": "This link is invalid or no longer available. Request a new link.",
+        "credentials_page_title": "Your passkeys",
+        "credentials_heading": "Your passkeys",
+        "credentials_description": "Add, label, and remove passkeys owned by your account.",
+        "credentials_add": "Add passkey",
+        "credentials_unnamed": "Unnamed passkey",
+        "credentials_created": "Created",
+        "credentials_label": "Passkey label",
+        "credentials_save": "Save label",
+        "credentials_remove": "Remove",
+        "credentials_empty": "No passkeys are registered.",
+        "confirm_credential_removal": "Remove this passkey?",
         "noscript": (
             "WebAuthn passkeys require JavaScript and a browser with "
             "PublicKeyCredential support."
@@ -106,6 +117,17 @@ _COPY: dict[str, dict[str, str]] = {
         "recovery_submit": "Odzyskaj dostęp",
         "recovery_waiting": "Oczekiwanie na odzyskanie dostępu.",
         "capability_unavailable": "Ten odnośnik jest nieprawidłowy lub nie jest już dostępny. Poproś o nowy odnośnik.",
+        "credentials_page_title": "Twoje klucze dostępu",
+        "credentials_heading": "Twoje klucze dostępu",
+        "credentials_description": "Dodawaj, nazywaj i usuwaj klucze należące do Twojego konta.",
+        "credentials_add": "Dodaj klucz dostępu",
+        "credentials_unnamed": "Klucz bez nazwy",
+        "credentials_created": "Utworzono",
+        "credentials_label": "Nazwa klucza",
+        "credentials_save": "Zapisz nazwę",
+        "credentials_remove": "Usuń",
+        "credentials_empty": "Nie zarejestrowano kluczy dostępu.",
+        "confirm_credential_removal": "Usunąć ten klucz dostępu?",
         "noscript": (
             "Klucze WebAuthn wymagają JavaScriptu oraz przeglądarki "
             "z obsługą PublicKeyCredential."
@@ -168,6 +190,17 @@ _COPY: dict[str, dict[str, str]] = {
         "recovery_submit": "Zugriff wiederherstellen",
         "recovery_waiting": "Warten auf die Kontowiederherstellung.",
         "capability_unavailable": "Dieser Link ist ungültig oder nicht mehr verfügbar. Fordern Sie einen neuen Link an.",
+        "credentials_page_title": "Ihre Passkeys",
+        "credentials_heading": "Ihre Passkeys",
+        "credentials_description": "Fügen Sie Passkeys Ihres Kontos hinzu, benennen oder entfernen Sie sie.",
+        "credentials_add": "Passkey hinzufügen",
+        "credentials_unnamed": "Unbenannter Passkey",
+        "credentials_created": "Erstellt",
+        "credentials_label": "Passkey-Bezeichnung",
+        "credentials_save": "Bezeichnung speichern",
+        "credentials_remove": "Entfernen",
+        "credentials_empty": "Keine Passkeys registriert.",
+        "confirm_credential_removal": "Diesen Passkey entfernen?",
         "noscript": (
             "WebAuthn-Passkeys erfordern JavaScript und einen Browser "
             "mit PublicKeyCredential-Unterstützung."

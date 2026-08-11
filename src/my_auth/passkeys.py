@@ -39,6 +39,9 @@ class ChallengeNotFound(Exception): ...
 class CredentialNotFound(Exception): ...
 
 
+class CredentialMutationDenied(Exception): ...
+
+
 class UserHandleMismatch(Exception): ...
 
 
@@ -261,6 +264,9 @@ class CredentialStore(Protocol):
         device_type: str | None,
         backed_up: bool | None,
     ) -> PasskeyCredential: ...
+    def update_credential_label(
+        self, credential_id: bytes, *, user_id: str, label: str | None
+    ) -> PasskeyCredential | None: ...
     def delete_credential(
         self,
         credential_id: bytes,
@@ -422,6 +428,16 @@ class MemoryCredentialStore:
             credential.sign_count = max(credential.sign_count, new_sign_count)
             credential.device_type = device_type
             credential.backed_up = backed_up
+            return credential
+
+    def update_credential_label(
+        self, credential_id: bytes, *, user_id: str, label: str | None
+    ) -> PasskeyCredential | None:
+        with self._lock:
+            credential = self.credentials.get(credential_id)
+            if credential is None or credential.user_id != user_id:
+                return None
+            credential.label = label
             return credential
 
     def delete_credential(
@@ -827,6 +843,25 @@ class SQLiteCredentialStore(_SQLiteBase):
                 ).fetchone()
             )
 
+    def update_credential_label(
+        self, credential_id: bytes, *, user_id: str, label: str | None
+    ) -> PasskeyCredential | None:
+        with self._connection(mutation=True) as conn:
+            key = bytes_to_b64url(credential_id)
+            if (
+                conn.execute(
+                    "UPDATE passkey_credentials SET label=? WHERE credential_id=? AND user_id=?",
+                    (label, key, user_id),
+                ).rowcount
+                != 1
+            ):
+                return None
+            row = conn.execute(
+                f"SELECT {_CREDENTIAL_COLUMNS} FROM passkey_credentials WHERE credential_id=? AND user_id=?",
+                (key, user_id),
+            ).fetchone()
+            return _sqlite_credential(row) if row else None
+
     def delete_credential(
         self,
         credential_id: bytes,
@@ -871,6 +906,15 @@ class SQLiteCredentialStore(_SQLiteBase):
             )
 
 
+def normalize_credential_label(label: str | None) -> str | None:
+    if label is None:
+        return None
+    normalized = label.strip()
+    if len(normalized) > 80:
+        raise ValueError("credential label must be at most 80 characters")
+    return normalized or None
+
+
 class PasskeyService:
     def __init__(
         self,
@@ -880,6 +924,39 @@ class PasskeyService:
         credentials: CredentialStore,
     ) -> None:
         self.config, self.challenges, self.credentials = config, challenges, credentials
+
+    def list_credentials(self, *, user_id: str) -> list[PasskeyCredential]:
+        return list(self.credentials.list_credentials_for_user(user_id))
+
+    def label_credential(
+        self, *, user_id: str, credential_id: bytes, label: str | None
+    ) -> PasskeyCredential:
+        credential = self.credentials.update_credential_label(
+            credential_id,
+            user_id=user_id,
+            label=normalize_credential_label(label),
+        )
+        if credential is None:
+            raise CredentialNotFound("unknown passkey credential")
+        return credential
+
+    def remove_credential(
+        self,
+        *,
+        user_id: str,
+        credential_id: bytes,
+        allow_final: bool = False,
+    ) -> None:
+        if self.credentials.delete_credential(
+            credential_id,
+            user_id=user_id,
+            require_remaining=not allow_final,
+        ):
+            return
+        credential = self.credentials.get_credential(credential_id)
+        if credential is None or credential.user_id != user_id:
+            raise CredentialNotFound("unknown passkey credential")
+        raise CredentialMutationDenied("final passkey credential cannot be removed")
 
     def begin_registration(
         self,

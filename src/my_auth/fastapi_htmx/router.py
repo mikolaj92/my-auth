@@ -93,6 +93,8 @@ def install_passkey_ui(
             hooks.prepare_capability_registration_context
         ),
         render_capability_registration=renderer.render_capability_registration,
+        render_credential_management=renderer.render_credential_management,
+        allow_final_credential_removal=hooks.allow_final_credential_removal,
     )
     auth_router = PasskeyAuthRouter(
         service=service,

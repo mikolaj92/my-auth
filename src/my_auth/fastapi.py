@@ -4,7 +4,7 @@ import inspect
 import logging
 import os
 import secrets
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, TypeVar, cast
 
@@ -14,8 +14,10 @@ from webauthn.helpers.exceptions import WebAuthnException
 
 from .passkeys import (
     AuthenticationResult,
+    b64url_to_bytes,
     ChallengeNotFound,
     ChallengeStore,
+    CredentialMutationDenied,
     CredentialNotFound,
     CredentialStore,
     PasskeyConfig,
@@ -37,6 +39,12 @@ MaybeAwaitable = T | Awaitable[T]
 class RenderRegister(Protocol):
     def __call__(
         self, request: Request, *, bootstrap: bool
+    ) -> MaybeAwaitable[Response]: ...
+
+
+class RenderCredentialManagement(Protocol):
+    def __call__(
+        self, request: Request, *, credentials: Sequence[PasskeyCredential]
     ) -> MaybeAwaitable[Response]: ...
 
 
@@ -80,6 +88,20 @@ class _PasskeyServiceAPI(Protocol):
         self, *, flow_id: str, credential: Mapping[str, object] | str
     ) -> VerifiedRegistration: ...
 
+    def list_credentials(self, *, user_id: str) -> list[PasskeyCredential]: ...
+
+    def label_credential(
+        self, *, user_id: str, credential_id: bytes, label: str | None
+    ) -> PasskeyCredential: ...
+
+    def remove_credential(
+        self,
+        *,
+        user_id: str,
+        credential_id: bytes,
+        allow_final: bool = False,
+    ) -> None: ...
+
 
 @dataclass(frozen=True)
 class PasskeyPaths:
@@ -87,6 +109,9 @@ class PasskeyPaths:
     register_page: str = "/register"
     activation_page: str = "/activate"
     recovery_page: str = "/recover"
+    credentials_page: str = "/account/passkeys"
+    credential_label: str = "/api/auth/credentials/{credential_id}/label"
+    credential_remove: str = "/api/auth/credentials/{credential_id}"
     logout: str = "/logout"
     login_options: str = "/api/auth/login/options"
     login_verify: str = "/api/auth/login/verify"
@@ -131,6 +156,10 @@ class PasskeyRouteHooks:
         MaybeAwaitable[RegistrationContext],
     ] | None = None
     render_capability_registration: RenderCapabilityRegistration | None = None
+    render_credential_management: RenderCredentialManagement | None = None
+    allow_final_credential_removal: Callable[
+        [Request, PasskeyUser], MaybeAwaitable[bool]
+    ] | None = None
 
 
 PasskeyFastAPIHooks = PasskeyRouteHooks
@@ -169,6 +198,15 @@ class PasskeyFastAPISettings:
                 ),
                 recovery_page=_env(
                     env, prefix, "RECOVERY_PAGE", PasskeyPaths.recovery_page
+                ),
+                credentials_page=_env(
+                    env, prefix, "CREDENTIALS_PAGE", PasskeyPaths.credentials_page
+                ),
+                credential_label=_env(
+                    env, prefix, "CREDENTIAL_LABEL", PasskeyPaths.credential_label
+                ),
+                credential_remove=_env(
+                    env, prefix, "CREDENTIAL_REMOVE", PasskeyPaths.credential_remove
                 ),
                 logout=_env(env, prefix, "LOGOUT_PATH", PasskeyPaths.logout),
                 login_options=_env(
@@ -255,6 +293,22 @@ class PasskeyAuthRouter:
         self.router.add_api_route(
             self.paths.register_page, self.register_page, methods=["GET"]
         )
+        if self.hooks.render_credential_management is not None:
+            self.router.add_api_route(
+                self.paths.credentials_page,
+                self.credentials_page,
+                methods=["GET"],
+            )
+            self.router.add_api_route(
+                self.paths.credential_label,
+                self.credential_label,
+                methods=["POST"],
+            )
+            self.router.add_api_route(
+                self.paths.credential_remove,
+                self.credential_remove,
+                methods=["DELETE"],
+            )
         if self.hooks.render_capability_registration is not None:
             self.router.add_api_route(
                 self.paths.activation_page, self.activation_page, methods=["GET"]
@@ -284,6 +338,63 @@ class PasskeyAuthRouter:
         return await _maybe_await(
             self.hooks.render_register(request, bootstrap=user is None)
         )
+
+    async def credentials_page(self, request: Request) -> Response:
+        user = await self._require_session_user(request)
+        renderer = self.hooks.render_credential_management
+        if renderer is None:
+            raise HTTPException(status_code=404, detail="not found")
+        credentials = self.service.list_credentials(user_id=user.user_id)
+        return await _maybe_await(
+            renderer(request, credentials=credentials)
+        )
+
+    async def credential_label(
+        self, request: Request, credential_id: str
+    ) -> Response:
+        user = await self._require_session_user(request)
+        body = await _json_body(request)
+        label = body.get("label")
+        if label is not None and not isinstance(label, str):
+            raise HTTPException(status_code=400, detail="invalid credential label")
+        try:
+            self.service.label_credential(
+                user_id=user.user_id,
+                credential_id=_credential_id(credential_id),
+                label=label,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        except CredentialNotFound as error:
+            raise HTTPException(status_code=404, detail="credential not found") from error
+        return await self.credentials_page(request)
+
+    async def credential_remove(
+        self, request: Request, credential_id: str
+    ) -> Response:
+        user = await self._require_session_user(request)
+        allow_final = False
+        if self.hooks.allow_final_credential_removal is not None:
+            allow_final = await _maybe_await(
+                self.hooks.allow_final_credential_removal(request, user)
+            )
+        try:
+            self.service.remove_credential(
+                user_id=user.user_id,
+                credential_id=_credential_id(credential_id),
+                allow_final=allow_final,
+            )
+        except CredentialNotFound as error:
+            raise HTTPException(status_code=404, detail="credential not found") from error
+        except CredentialMutationDenied as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return await self.credentials_page(request)
+
+    async def _require_session_user(self, request: Request) -> PasskeyUser:
+        user = await _maybe_await(self.hooks.get_session_user(request))
+        if user is None:
+            raise HTTPException(status_code=401, detail="authentication required")
+        return user
 
     async def activation_page(self, request: Request) -> Response:
         return await self._capability_registration_page(request, kind="invitation")
@@ -472,6 +583,13 @@ async def _json_body(request: Request) -> dict[str, object]:
     if not isinstance(value, dict):
         raise HTTPException(status_code=400, detail="JSON object body is required")
     return cast(dict[str, object], value)
+
+
+def _credential_id(value: str) -> bytes:
+    try:
+        return b64url_to_bytes(value)
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=404, detail="credential not found") from error
 
 
 def _capability_registration(
