@@ -224,7 +224,7 @@ def test_schema_must_be_explicit_and_is_versioned(tmp_path: Path) -> None:
         ensure_sqlite_schema(connection)
         inspection = inspect_sqlite_schema(connection)
         assert inspection.state == "current"
-        assert inspection.version == 2
+        assert inspection.version == 3
         assert inspect_sqlite_schema(connection).state == "current"
     with pytest.raises(RuntimeError):
         SQLiteCredentialStore(path.with_name("uninitialized.sqlite"))

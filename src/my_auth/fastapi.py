@@ -22,6 +22,7 @@ from .passkeys import (
     PasskeyCredential,
     PasskeyService,
     PasskeyUser,
+    RegistrationContext,
     UserHandleMismatch,
     VerifiedRegistration,
 )
@@ -58,7 +59,11 @@ class _PasskeyServiceAPI(Protocol):
     ) -> AuthenticationResult: ...
 
     def begin_registration(
-        self, *, flow_id: str, user: PasskeyUser
+        self,
+        *,
+        flow_id: str,
+        user: PasskeyUser | None = None,
+        context: RegistrationContext | None = None,
     ) -> dict[str, object]: ...
 
     def verify_registration(
@@ -106,6 +111,9 @@ class PasskeyRouteHooks:
     after_login: Callable[
         [Request, AuthUser, PasskeyCredential], MaybeAwaitable[None]
     ] = field(default=lambda _request, _user, _credential: None)
+    prepare_registration_context: Callable[
+        [Request, str, str], MaybeAwaitable[RegistrationContext]
+    ] | None = None
 
 
 PasskeyFastAPIHooks = PasskeyRouteHooks
@@ -282,14 +290,24 @@ class PasskeyAuthRouter:
                 status_code=403, detail="passkey registration is not allowed"
             )
         session_user = await _maybe_await(self.hooks.get_session_user(request))
-        user = session_user or await _maybe_await(
-            self.hooks.prepare_registration(
-                request, _registration_username(await _json_body(request))
-            )
-        )
         flow_id = self._new_flow_id()
+        if session_user is not None:
+            context = RegistrationContext(
+                kind="additional_credential", user=session_user
+            )
+        else:
+            username = _registration_username(await _json_body(request))
+            if self.hooks.prepare_registration_context is not None:
+                context = await _maybe_await(
+                    self.hooks.prepare_registration_context(request, flow_id, username)
+                )
+            else:
+                user = await _maybe_await(
+                    self.hooks.prepare_registration(request, username)
+                )
+                context = RegistrationContext(kind="bootstrap", user=user)
         response = JSONResponse(
-            self.service.begin_registration(flow_id=flow_id, user=user)
+            self.service.begin_registration(flow_id=flow_id, context=context)
         )
         self._set_cookie(response, self.cookies.registration_challenge, flow_id)
         return response

@@ -108,10 +108,13 @@ per operation.
 `PasskeyRouteHooks` requires these callbacks:
 
 - `get_session_user(request)` — current host session user, or `None`;
-- `prepare_registration(request, display_name)` — pure policy/profile step;
+- `prepare_registration(request, display_name)` — legacy-compatible bootstrap policy/profile step;
+- `prepare_registration_context(request, flow_id, username)` — preferred typed resolver for bootstrap, invitation, or recovery; it must resolve one concrete `PasskeyUser` and may bind a claimed capability to the allocated flow;
 - `complete_registration(request, verified)` — durable host completion, returning
   an `AuthUser` or `None`;
 - `get_auth_user(user_id)`, `login(response, request, user)`, `logout(response, request)`;
+Authenticated registration is always typed as `additional_credential` and derives its subject exclusively from `get_session_user`; request identity fields cannot retarget it. Anonymous typed resolvers return `RegistrationContext(kind=...)`. Invitation and recovery contexts require a capability id and can be constructed with `registration_context_from_capability(...)`, which validates capability purpose and subject. The resolved context is persisted with the WebAuthn challenge and returned unchanged in `VerifiedRegistration.context`. Existing hosts may keep `prepare_registration`; it maps explicitly to `bootstrap` and does not infer bootstrap from credential-store emptiness.
+
 - `registration_allowed(request)`, `render_login(request)`, and
   `render_register(request, *, bootstrap)`.
 
