@@ -20,6 +20,15 @@ class UnsupportedSQLiteSchema(SQLiteSchemaError):
 
 @dataclass(frozen=True)
 class SQLiteSchemaInspection:
+    """Schema inspection result.
+
+    Runtime stores accept only ``current``. ``legacy`` is not a live
+    read/write layout: it gates the explicit one-shot
+    ``migrate_sqlite_schema`` upgrade. ``empty`` and
+    ``canonical_unversioned`` are initialized with ``ensure_sqlite_schema``.
+    Unsupported layouts fail closed.
+    """
+
     state: Literal["empty", "canonical_unversioned", "legacy", "current", "unsupported"]
     version: int | None = None
     diagnostics: tuple[str, ...] = ()
@@ -212,8 +221,15 @@ def inspect_sqlite_schema(connection: sqlite3.Connection) -> SQLiteSchemaInspect
 
     columns = {table: _columns(connection, table) for table in required}
     challenge_columns = columns["passkey_challenges"]
-    legacy_flow_key = "flow_key" in challenge_columns and "key" not in challenge_columns
-    if legacy_flow_key:
+    has_flow_key = "flow_key" in challenge_columns
+    has_key = "key" in challenge_columns
+    if has_flow_key and has_key:
+        return SQLiteSchemaInspection(
+            "unsupported",
+            diagnostics=("challenge table has both flow_key and key columns",),
+        )
+    # Pre-versioned 0.1 layout (flow_key). Migrate-only — never a live dual path.
+    if has_flow_key and not has_key:
         expected_legacy = {
             "passkey_users": {"user_id", "user_handle", "name", "display_name"},
             "passkey_credentials": {
@@ -391,7 +407,13 @@ def migrate_sqlite_schema(
     *,
     transaction_mode: Literal["standalone", "external"] = "standalone",
 ) -> SQLiteSchemaInspection:
-    """Migrate supported legacy layouts atomically, preserving source on failure."""
+    """One-shot upgrade from supported legacy layouts to ``current``.
+
+    This is the only upgrade path for ``legacy`` inspections (0.1 ``flow_key``
+    layout or schema v2). It is not a runtime dual-read: stores reject
+    non-``current`` schemas until migration succeeds. Ambiguous layouts fail
+    closed; source tables are preserved when standalone migration rolls back.
+    """
     _validate_transaction_mode(transaction_mode)
     if transaction_mode == "external":
         if not connection.in_transaction:
@@ -499,10 +521,13 @@ def migrate_sqlite_schema(
                 ),
             )
         challenge_columns = _columns(connection, "passkey_challenges")
-        key_column = "flow_key" if "flow_key" in challenge_columns else "key"
+        if "flow_key" not in challenge_columns or "key" in challenge_columns:
+            raise UnsupportedSQLiteSchema(
+                "cannot migrate schema: expected exclusive legacy flow_key column"
+            )
         for row in _fetchall(
             connection.execute(
-                f"SELECT {key_column},kind,challenge,expires_at,user_id,user_handle,user_name,user_display_name FROM passkey_challenges"
+                "SELECT flow_key,kind,challenge,expires_at,user_id,user_handle,user_name,user_display_name FROM passkey_challenges"
             )
         ):
             values = list(row)

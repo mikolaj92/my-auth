@@ -179,6 +179,21 @@ def test_login_and_register_templates_wrap_panel_in_passkey_shell() -> None:
         assert 'class="passkey-shell"' in html
 
 
+def test_packaged_pages_use_app_factory_shell_not_legacy_standalone_base() -> None:
+    """Embedded UI extends app-factory/shell.html; legacy base.html is gone."""
+    templates = REPO_ROOT / "src/my_auth/fastapi_htmx/templates"
+    assert not (templates / "base.html").exists()
+    for name in (
+        "login.html",
+        "register.html",
+        "credential_management.html",
+        "capability_registration.html",
+    ):
+        html = (templates / name).read_text(encoding="utf-8")
+        assert '{% extends "app_factory/shell.html" %}' in html
+        assert "Legacy standalone shell" not in html
+
+
 def test_passkey_panels_use_basecoat_button_and_field_conventions() -> None:
     """Basecoat 1.0: btn + data-variant, not btn-primary; fields use .field."""
     package = files("my_auth.fastapi_htmx")

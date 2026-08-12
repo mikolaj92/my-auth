@@ -421,7 +421,9 @@ class PasskeyAuthRouter:
 
     async def login_verify(self, request: Request) -> Response:
         flow_id = self._challenge_cookie(request, self.cookies.authentication_challenge)
-        credential = _without_legacy_user_handle(await _json_body(request))
+        # Modern WebAuthn path: forward response.userHandle unchanged.
+        # Missing handles are allowed; mismatches still fail closed in the service.
+        credential = await _json_body(request)
         try:
             result = self.service.finish_authentication(
                 flow_id=flow_id, credential=credential, require_user_handle=False
@@ -627,17 +629,6 @@ def _registration_username(body: Mapping[str, object]) -> str:
             detail="username must not contain whitespace",
         )
     return username
-
-
-def _without_legacy_user_handle(credential: dict[str, object]) -> dict[str, object]:
-    response = credential.get("response")
-    if not isinstance(response, dict) or "userHandle" not in response:
-        return credential
-    copied = dict(credential)
-    copied_response = dict(cast(dict[str, object], response))
-    _ = copied_response.pop("userHandle", None)
-    copied["response"] = copied_response
-    return copied
 
 
 def _env(env: Mapping[str, str], prefix: str, name: str, default: T) -> str | T:

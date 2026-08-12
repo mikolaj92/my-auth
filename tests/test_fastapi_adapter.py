@@ -223,3 +223,122 @@ def test_settings_cookie_defaults_are_v2() -> None:
         PasskeyCookies().authentication_challenge
         != PasskeyCookies().registration_challenge
     )
+
+
+def test_login_verify_forwards_user_handle_without_legacy_stripping() -> None:
+    """Modern WebAuthn path keeps response.userHandle for service validation."""
+    from collections.abc import Mapping
+    from typing import Any
+
+    from my_auth import AuthenticationResult, PasskeyCredential
+
+    captured: dict[str, Any] = {}
+    user = PasskeyUser("u", b"handle", "name")
+    stored = PasskeyCredential(b"cred", "u", b"key")
+
+    class RecordingService:
+        config = PasskeyConfig(
+            rp_id="localhost", rp_name="Demo", origin="http://localhost"
+        )
+
+        def begin_authentication(self, **_kwargs):
+            raise AssertionError("unused")
+
+        def finish_authentication(
+            self,
+            *,
+            flow_id: str,
+            credential: Mapping[str, object] | str,
+            require_user_handle: bool = True,
+        ) -> AuthenticationResult:
+            captured["flow_id"] = flow_id
+            captured["credential"] = credential
+            captured["require_user_handle"] = require_user_handle
+            return AuthenticationResult(user, stored)
+
+        def begin_registration(self, **_kwargs):
+            raise AssertionError("unused")
+
+        def verify_registration(self, **_kwargs):
+            raise AssertionError("unused")
+
+        def list_credentials(self, **_kwargs):
+            return []
+
+        def label_credential(self, **_kwargs):
+            raise AssertionError("unused")
+
+        def remove_credential(self, **_kwargs):
+            raise AssertionError("unused")
+
+    async def session(_request: Request):
+        return None
+
+    async def prepare(_request: Request, username: str):
+        del username
+        return user
+
+    async def complete(_request: Request, result: VerifiedRegistration):
+        del result
+        return user
+
+    async def auth(_user_id: str):
+        return user
+
+    async def login(_response: Response, _request: Request, _user: PasskeyUser):
+        return None
+
+    async def logout(_response: Response, _request: Request):
+        return None
+
+    async def policy(_request: Request):
+        return True
+
+    async def render_login(_request: Request):
+        return PlainTextResponse("login")
+
+    async def render_register(request: Request, *, bootstrap: bool):
+        del request, bootstrap
+        return PlainTextResponse("register")
+
+    hooks = PasskeyRouteHooks(
+        get_session_user=session,
+        prepare_registration=prepare,
+        complete_registration=complete,
+        get_auth_user=auth,
+        login=login,
+        logout=logout,
+        registration_allowed=policy,
+        render_login=render_login,
+        render_register=render_register,
+    )
+    app = FastAPI()
+    app.include_router(
+        PasskeyAuthRouter(service=RecordingService(), hooks=hooks).router  # type: ignore[arg-type]
+    )
+    client = TestClient(app)
+    payload = {
+        "id": "cred",
+        "rawId": "cred",
+        "type": "public-key",
+        "response": {
+            "clientDataJSON": "data",
+            "authenticatorData": "auth",
+            "signature": "sig",
+            "userHandle": "aGFuZGxl",
+        },
+    }
+
+    response = client.post(
+        "/api/auth/login/verify",
+        json=payload,
+        cookies={"passkey_authentication_challenge": "flow-1"},
+    )
+
+    assert response.status_code == 200
+    assert captured["flow_id"] == "flow-1"
+    assert captured["require_user_handle"] is False
+    assert isinstance(captured["credential"], dict)
+    response_body = captured["credential"]["response"]
+    assert isinstance(response_body, dict)
+    assert response_body.get("userHandle") == "aGFuZGxl"
