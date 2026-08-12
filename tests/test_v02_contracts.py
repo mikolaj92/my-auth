@@ -414,3 +414,31 @@ def test_legacy_schema_migration_rolls_back_source_on_late_failure() -> None:
     )
     for table, rows in before_rows.items():
         assert connection.execute(f"SELECT * FROM {table}").fetchall() == rows
+
+
+def test_inspection_rejects_hybrid_flow_key_and_key_challenge_layout() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.executescript(
+        """
+        CREATE TABLE passkey_users (
+            user_id TEXT PRIMARY KEY, user_handle TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL, display_name TEXT
+        );
+        CREATE TABLE passkey_credentials (
+            credential_id TEXT PRIMARY KEY, user_id TEXT NOT NULL,
+            public_key BLOB NOT NULL, sign_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE passkey_challenges (
+            flow_key TEXT, key TEXT, kind TEXT NOT NULL, challenge BLOB NOT NULL,
+            expires_at TEXT NOT NULL, user_id TEXT, user_handle TEXT,
+            user_name TEXT, user_display_name TEXT
+        );
+        """
+    )
+
+    inspection = inspect_sqlite_schema(connection)
+
+    assert inspection.state == "unsupported"
+    assert "both flow_key and key" in " ".join(inspection.diagnostics)
+    connection.close()
