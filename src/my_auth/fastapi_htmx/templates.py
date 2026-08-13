@@ -95,6 +95,7 @@ class PasskeyTemplateRenderer:
             registration_kind=registration_kind,
             capability=capability if capability_valid else None,
             capability_valid=capability_valid,
+            identity_public_state_message=copy["capability_unavailable"],
             credentials=credentials or [],
             show_registration_link=await _maybe_await(
                 self.config.show_registration_link(request)

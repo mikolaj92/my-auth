@@ -135,12 +135,12 @@ def test_repository_app_factory_pin_matches_lock() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
 
-    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.5.21"
+    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.6.3"
     app_factory = next(
         package for package in lock["package"] if package["name"] == "app-factory"
     )
-    assert app_factory["version"] == "0.5.21"
-    assert "tag=v0.5.21" in app_factory["source"]["git"]
+    assert app_factory["version"] == "0.6.3"
+    assert "tag=v0.6.3" in app_factory["source"]["git"]
 
 
 def test_public_api_has_only_installer_contract() -> None:
@@ -177,6 +177,30 @@ def test_login_and_register_templates_wrap_panel_in_passkey_shell() -> None:
     for name in ("templates/login.html", "templates/register.html"):
         html = package.joinpath(name).read_text(encoding="utf-8")
         assert 'class="passkey-shell"' in html
+
+
+def test_packaged_pages_extend_identity_shells_not_bare_shell() -> None:
+    """Login/register stay on shell.html; ceremony pages use identity frames."""
+    package = files("my_auth.fastapi_htmx")
+    login = package.joinpath("templates/login.html").read_text(encoding="utf-8")
+    register = package.joinpath("templates/register.html").read_text(encoding="utf-8")
+    capability = package.joinpath("templates/capability_registration.html").read_text(
+        encoding="utf-8"
+    )
+    credentials = package.joinpath("templates/credential_management.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert '{% extends "app_factory/shell.html" %}' in login
+    assert '{% extends "app_factory/shell.html" %}' in register
+    assert '{% extends "app_factory/identity_public_shell.html" %}' in capability
+    assert "{% block identity_panel %}" in capability
+    assert "data-platform-identity-ceremony" in capability
+    assert '{% include "app_factory/identity_public_state.html" %}' in capability
+    assert '{% extends "app_factory/identity_authenticated_shell.html" %}' in credentials
+    assert 'data-platform-identity-ceremony="credentials"' in credentials
+    assert "{% block content %}" in credentials
+    assert "{% block identity_panel %}" not in credentials
 
 
 def test_passkey_panels_use_basecoat_button_and_field_conventions() -> None:
@@ -358,10 +382,16 @@ def test_installed_ui_renders_distinct_activation_and_recovery_pages() -> None:
     assert "Activate your account" in activation.text
     assert 'data-registration-kind="invitation"' in activation.text
     assert 'data-capability="invite-token"' in activation.text
+    assert "data-platform-identity-public" in activation.text
+    assert 'data-platform-identity-ceremony="activation"' in activation.text
     assert "Recover access" in recovery.text
     assert 'data-registration-kind="recovery"' in recovery.text
     assert 'data-capability="recovery-token"' in recovery.text
+    assert "data-platform-identity-public" in recovery.text
+    assert 'data-platform-identity-ceremony="recovery"' in recovery.text
     assert "invalid or no longer available" in invalid.text
+    assert "data-platform-identity-public-state" in invalid.text
+    assert "data-platform-identity-public" in invalid.text
     assert 'data-capability=' not in invalid.text
     controller = client.get(f"{ui.static_mount_path}/passkey-ui.js").text
     helper = client.get(f"{ui.static_mount_path}/passkey.js").text
@@ -439,6 +469,8 @@ def test_authenticated_credential_page_is_owner_scoped_and_mutable() -> None:
     assert page.status_code == 200
     assert "Zmlyc3Q" in page.text and "c2Vjb25k" in page.text
     assert "b3RoZXI" not in page.text
+    assert "data-platform-identity-authenticated" in page.text
+    assert 'data-platform-identity-ceremony="credentials"' in page.text
     labeled = client.post(
         "/api/auth/credentials/Zmlyc3Q/label", json={"label": "Laptop"}
     )

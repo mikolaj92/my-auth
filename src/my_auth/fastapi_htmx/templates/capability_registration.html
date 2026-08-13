@@ -1,4 +1,4 @@
-{% extends "app_factory/shell.html" %}
+{% extends "app_factory/identity_public_shell.html" %}
 
 {% set is_activation = registration_kind == "invitation" %}
 {% set page_title = t.activation_page_title if is_activation else t.recovery_page_title %}
@@ -12,8 +12,8 @@
 {% block content_class %}passkey-content{% endblock %}
 {% block loading_label %}{{ t.loading }}{% endblock %}
 
-{% block content %}
-  <div class="passkey-shell">
+{% block identity_panel %}
+  <div class="passkey-shell" data-platform-identity-ceremony="{{ 'activation' if is_activation else 'recovery' }}">
     <section class="card passkey-card" aria-labelledby="passkey-page-title">
       <header class="passkey-card__header">
         <p class="badge passkey-eyebrow" data-variant="secondary">
@@ -53,9 +53,7 @@
           {% set status_message = t.activation_waiting if is_activation else t.recovery_waiting %}
           {% include "_passkey_status.html" %}
         {% else %}
-          <div id="{{ register_error_target_id }}" class="alert passkey-status" data-variant="destructive" role="alert">
-            {{ t.capability_unavailable }}
-          </div>
+          {% include "app_factory/identity_public_state.html" %}
         {% endif %}
         <noscript>
           <p class="alert passkey-status" data-variant="destructive" role="status">{{ t.noscript }}</p>
