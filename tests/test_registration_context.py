@@ -88,7 +88,9 @@ def test_service_binds_context_to_challenge_and_verified_result(monkeypatch) -> 
         credential_device_type = None
         credential_backed_up = None
 
-    monkeypatch.setattr("my_auth.passkeys.verify_registration_response", lambda **_: Verified())
+    monkeypatch.setattr(
+        "my_auth.passkeys.verify_registration_response", lambda **_: Verified()
+    )
     result = service.verify_registration(
         flow_id="flow", credential={"id": "Y3JlZGVudGlhbA", "response": {}}
     )
@@ -134,6 +136,13 @@ def test_v2_schema_migrates_to_context_aware_v3(tmp_path: Path) -> None:
         inspection = migrate_sqlite_schema(connection)
         assert inspection.state == "current"
         assert inspection.version == 3
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        assert "passkey_enrollment_capabilities" in tables
         columns = {
             cast(str, row[1])
             for row in connection.execute("PRAGMA table_info(passkey_challenges)")

@@ -135,6 +135,7 @@ def test_canonical_schema_helper_is_explicit_and_versioned(tmp_path: Path) -> No
             "passkey_users",
             "passkey_credentials",
             "passkey_challenges",
+            "passkey_enrollment_capabilities",
             "my_auth_schema",
         }
 
