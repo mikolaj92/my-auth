@@ -135,12 +135,12 @@ def test_repository_app_factory_pin_matches_lock() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
 
-    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.6.3"
+    assert project["tool"]["uv"]["sources"]["app-factory"]["tag"] == "v0.6.5"
     app_factory = next(
         package for package in lock["package"] if package["name"] == "app-factory"
     )
-    assert app_factory["version"] == "0.6.3"
-    assert "tag=v0.6.3" in app_factory["source"]["git"]
+    assert app_factory["version"] == "0.6.5"
+    assert "tag=v0.6.5" in app_factory["source"]["git"]
 
 
 def test_public_api_has_only_installer_contract() -> None:
