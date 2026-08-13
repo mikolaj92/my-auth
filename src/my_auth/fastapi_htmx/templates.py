@@ -4,13 +4,15 @@ import inspect
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, TypeVar
+from types import SimpleNamespace
+from typing import Any, Literal, TypeVar
 
 from app_factory.jinja import configure_jinja_env
 from fastapi import Request
 from jinja2 import ChoiceLoader, Environment, PackageLoader, select_autoescape
 from starlette.responses import HTMLResponse, Response
 
+from my_auth.fastapi import PasskeyPaths
 from my_auth.passkeys import PasskeyCredential
 
 from .config import MaybeAwaitable, PasskeyUiConfig
@@ -85,6 +87,9 @@ class PasskeyTemplateRenderer:
         return self.environment.get_template(template_name).render(
             request=request,
             paths=self.config.paths,
+            platform_paths=_platform_paths_for_shell(
+                self.environment, self.config.paths
+            ),
             bootstrap=bootstrap,
             passkey_js_url=f"{static_base}/passkey-ui.js",
             passkey_css_url=f"{static_base}/passkey-ui.css",
@@ -144,6 +149,29 @@ class PasskeyTemplateRenderer:
                 path="/",
             )
         return response
+
+
+def _platform_paths_for_shell(environment: Environment, paths: PasskeyPaths) -> Any:
+    """Reuse host platform_paths when present; otherwise map PasskeyPaths.
+
+    identity_authenticated_shell includes product chrome that reads
+    platform_paths.login / .account. Hosts that called install_platform already
+    put PlatformPaths on the Jinja environment.
+    """
+    existing = environment.globals.get("platform_paths")
+    if existing is not None:
+        return existing
+    return SimpleNamespace(
+        login=paths.login_page,
+        logout=paths.logout,
+        register=paths.register_page,
+        recovery=paths.recovery_page,
+        activation=paths.activation_page,
+        credentials=paths.credentials_page,
+        account="/account",
+        admin_users="/admin/users",
+        invite="/admin/users/invite",
+    )
 
 
 def _resolve_locale(request: Request, config: PasskeyUiConfig) -> str:
