@@ -11,6 +11,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
+from .sqlite_schema import PASSKEY_ENROLLMENT_CAPABILITY_SCHEMA
+
 EnrollmentPurpose = Literal["invitation", "account_recovery"]
 
 
@@ -88,7 +90,9 @@ def _validate_claim(*, token: str, flow_id: str, expected_purpose: str) -> None:
 
 
 def _token_hash(token: str) -> str:
-    return hashlib.sha256(b"my-auth:enrollment-capability:v1\0" + token.encode()).hexdigest()
+    return hashlib.sha256(
+        b"my-auth:enrollment-capability:v1\0" + token.encode()
+    ).hexdigest()
 
 
 def _new_issued(
@@ -151,9 +155,7 @@ class MemoryEnrollmentCapabilityStore:
         flow_id: str,
         expected_purpose: EnrollmentPurpose,
     ) -> EnrollmentCapability:
-        _validate_claim(
-            token=token, flow_id=flow_id, expected_purpose=expected_purpose
-        )
+        _validate_claim(token=token, flow_id=flow_id, expected_purpose=expected_purpose)
         digest = _token_hash(token)
         now = _now_utc(self._now)
         with self._lock:
@@ -251,22 +253,6 @@ class MemoryEnrollmentCapabilityStore:
             return True
 
 
-_CAPABILITY_SCHEMA = """
-CREATE TABLE IF NOT EXISTS passkey_enrollment_capabilities (
- capability_id TEXT PRIMARY KEY,
- token_hash TEXT NOT NULL UNIQUE,
- purpose TEXT NOT NULL CHECK (purpose IN ('invitation', 'account_recovery')),
- subject TEXT NOT NULL,
- expires_at TEXT NOT NULL,
- issued_by TEXT,
- claimed_flow_id TEXT UNIQUE,
- claimed_at TEXT,
- consumed_at TEXT,
- revoked_at TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_passkey_enrollment_capabilities_expires_at
-ON passkey_enrollment_capabilities(expires_at);
-"""
 _CAPABILITY_COLUMNS = (
     "capability_id,purpose,subject,expires_at,issued_by,claimed_flow_id,"
     "claimed_at,consumed_at,revoked_at"
@@ -293,7 +279,9 @@ class SQLiteEnrollmentCapabilityStore:
             self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._connection(mutation=True) as connection:
             for statement in (
-                part.strip() for part in _CAPABILITY_SCHEMA.split(";") if part.strip()
+                part.strip()
+                for part in PASSKEY_ENROLLMENT_CAPABILITY_SCHEMA.split(";")
+                if part.strip()
             ):
                 connection.execute(statement)
 
@@ -366,9 +354,7 @@ class SQLiteEnrollmentCapabilityStore:
         flow_id: str,
         expected_purpose: EnrollmentPurpose,
     ) -> EnrollmentCapability:
-        _validate_claim(
-            token=token, flow_id=flow_id, expected_purpose=expected_purpose
-        )
+        _validate_claim(token=token, flow_id=flow_id, expected_purpose=expected_purpose)
         now = _now_utc(self._now)
         with self._connection(mutation=True) as connection:
             row = connection.execute(

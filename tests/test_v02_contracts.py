@@ -217,6 +217,65 @@ def test_counter_cas_rejects_stale_nonzero_and_preserves_zero_behavior() -> None
     assert updated.sign_count == 0
 
 
+def test_ensure_sqlite_schema_creates_enrollment_capabilities_table() -> None:
+    connection = sqlite3.connect(":memory:")
+    ensure_sqlite_schema(connection)
+    tables = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    assert "passkey_enrollment_capabilities" in tables
+    columns = {
+        str(row[1])
+        for row in connection.execute(
+            "PRAGMA table_info(passkey_enrollment_capabilities)"
+        )
+    }
+    assert columns == {
+        "capability_id",
+        "token_hash",
+        "purpose",
+        "subject",
+        "expires_at",
+        "issued_by",
+        "claimed_flow_id",
+        "claimed_at",
+        "consumed_at",
+        "revoked_at",
+    }
+    indexes = {
+        str(row[1])
+        for row in connection.execute(
+            "PRAGMA index_list(passkey_enrollment_capabilities)"
+        )
+    }
+    assert "idx_passkey_enrollment_capabilities_expires_at" in indexes
+    inspection = inspect_sqlite_schema(connection)
+    assert inspection.state == "current"
+    assert inspection.version == 3
+    connection.close()
+
+
+def test_ensure_stamps_enrollment_table_on_existing_current_schema() -> None:
+    connection = sqlite3.connect(":memory:")
+    ensure_sqlite_schema(connection)
+    connection.execute("DROP TABLE passkey_enrollment_capabilities")
+    connection.commit()
+    assert inspect_sqlite_schema(connection).state == "current"
+    ensure_sqlite_schema(connection)
+    tables = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    assert "passkey_enrollment_capabilities" in tables
+    assert inspect_sqlite_schema(connection).state == "current"
+    connection.close()
+
+
 def test_schema_must_be_explicit_and_is_versioned(tmp_path: Path) -> None:
     path = tmp_path / "auth.sqlite"
     with sqlite3.connect(path) as connection:
@@ -339,6 +398,12 @@ def test_legacy_schema_migration_preserves_optional_fields_and_flow_key() -> Non
 
     assert migrated.state == "current"
     assert connection.execute("SELECT value FROM unrelated").fetchone() == ("kept",)
+    assert {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    } >= {"passkey_enrollment_capabilities"}
     assert connection.execute(
         "SELECT credential_id,transports,device_type,backed_up,label,created_at "
         "FROM passkey_credentials"
