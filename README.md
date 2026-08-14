@@ -18,9 +18,9 @@ uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git"
 uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git"
 ```
 
-This repository uses app-factory tag `v0.6.3` to test the optional HTMX
+This repository uses app-factory tag `v0.6.5` to test the optional HTMX
 adapter. It is a library, not a production host using `app-factory[platform]`,
-so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.6.3/COMPAT.md)
+so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.6.5/COMPAT.md)
 does not define this package's version. The published `fastapi-htmx` extra
 continues to accept compatible `app-factory>=0.5` releases. Hosts on the
 multi-user BOM should keep `my-auth>=0.4,<0.5` and override nested
