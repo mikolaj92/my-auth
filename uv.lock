@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -407,6 +407,15 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+dev = [
+    { name = "app-factory", extra = ["fastapi"] },
+    { name = "basedpyright" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "jinja2" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
 fastapi = [
     { name = "fastapi" },
 ]
@@ -429,14 +438,21 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "app-factory", extras = ["fastapi"], marker = "extra == 'dev'", git = "https://github.com/mikolaj92/app-factory?tag=v0.5.21" },
     { name = "app-factory", extras = ["fastapi"], marker = "extra == 'fastapi-htmx'", git = "https://github.com/mikolaj92/app-factory?tag=v0.5.21" },
+    { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.21" },
+    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.115" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.115" },
     { name = "fastapi", marker = "extra == 'fastapi-htmx'", specifier = ">=0.115" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
+    { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1" },
     { name = "jinja2", marker = "extra == 'fastapi-htmx'", specifier = ">=3.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "typing-extensions", specifier = ">=4.12" },
     { name = "webauthn", specifier = ">=2.2,<3" },
 ]
-provides-extras = ["fastapi", "fastapi-htmx"]
+provides-extras = ["fastapi", "fastapi-htmx", "dev"]
 
 [package.metadata.requires-dev]
 dev = [
