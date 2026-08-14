@@ -16,6 +16,8 @@ from my_auth import (
     EnrollmentPurpose,
     MemoryEnrollmentCapabilityStore,
     SQLiteEnrollmentCapabilityStore,
+    ensure_sqlite_schema,
+    inspect_sqlite_schema,
 )
 
 
@@ -234,3 +236,60 @@ def test_sqlite_claim_has_one_concurrent_winner(tmp_path: Path) -> None:
     for thread in threads:
         thread.join()
     assert sorted(outcomes) == ["claimed", "unavailable"]
+
+
+def _table_names(connection: sqlite3.Connection) -> set[str]:
+    return {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+
+
+def test_ensure_sqlite_schema_creates_enrollment_capabilities_table() -> None:
+    connection = sqlite3.connect(":memory:")
+    ensure_sqlite_schema(connection)
+    assert "passkey_enrollment_capabilities" in _table_names(connection)
+    columns = {
+        str(row[1])
+        for row in connection.execute(
+            "PRAGMA table_info(passkey_enrollment_capabilities)"
+        )
+    }
+    assert columns == {
+        "capability_id",
+        "token_hash",
+        "purpose",
+        "subject",
+        "expires_at",
+        "issued_by",
+        "claimed_flow_id",
+        "claimed_at",
+        "consumed_at",
+        "revoked_at",
+    }
+    indexes = {
+        str(row[1])
+        for row in connection.execute(
+            "PRAGMA index_list(passkey_enrollment_capabilities)"
+        )
+    }
+    assert "idx_passkey_enrollment_capabilities_expires_at" in indexes
+    inspection = inspect_sqlite_schema(connection)
+    assert inspection.state == "current"
+    assert inspection.version == 3
+    connection.close()
+
+
+def test_ensure_stamps_enrollment_table_on_existing_current_schema() -> None:
+    connection = sqlite3.connect(":memory:")
+    ensure_sqlite_schema(connection)
+    connection.execute("DROP TABLE passkey_enrollment_capabilities")
+    connection.commit()
+    assert inspect_sqlite_schema(connection).state == "current"
+    assert "passkey_enrollment_capabilities" not in _table_names(connection)
+    ensure_sqlite_schema(connection)
+    assert "passkey_enrollment_capabilities" in _table_names(connection)
+    assert inspect_sqlite_schema(connection).state == "current"
+    connection.close()

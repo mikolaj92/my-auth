@@ -9,6 +9,23 @@ from .passkeys import PASSKEY_SQLITE_CHALLENGE_SCHEMA, PASSKEY_SQLITE_SCHEMA
 
 CURRENT_SCHEMA_VERSION = 3
 
+PASSKEY_ENROLLMENT_CAPABILITY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS passkey_enrollment_capabilities (
+ capability_id TEXT PRIMARY KEY,
+ token_hash TEXT NOT NULL UNIQUE,
+ purpose TEXT NOT NULL CHECK (purpose IN ('invitation', 'account_recovery')),
+ subject TEXT NOT NULL,
+ expires_at TEXT NOT NULL,
+ issued_by TEXT,
+ claimed_flow_id TEXT UNIQUE,
+ claimed_at TEXT,
+ consumed_at TEXT,
+ revoked_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_passkey_enrollment_capabilities_expires_at
+ON passkey_enrollment_capabilities(expires_at);
+"""
+
 
 class SQLiteSchemaError(RuntimeError):
     """Base class for explicit schema lifecycle failures."""
@@ -93,15 +110,44 @@ _CANONICAL_COLUMNS: dict[str, tuple[tuple[str, str, int, int, object], ...]] = {
         ("registration_kind", "TEXT", 0, 0, None),
         ("capability_id", "TEXT", 0, 0, None),
     ),
+    "passkey_enrollment_capabilities": (
+        ("capability_id", "TEXT", 0, 1, None),
+        ("token_hash", "TEXT", 1, 0, None),
+        ("purpose", "TEXT", 1, 0, None),
+        ("subject", "TEXT", 1, 0, None),
+        ("expires_at", "TEXT", 1, 0, None),
+        ("issued_by", "TEXT", 0, 0, None),
+        ("claimed_flow_id", "TEXT", 0, 0, None),
+        ("claimed_at", "TEXT", 0, 0, None),
+        ("consumed_at", "TEXT", 0, 0, None),
+        ("revoked_at", "TEXT", 0, 0, None),
+    ),
 }
+
+
+def _has_unique_column_index(
+    connection: sqlite3.Connection, table: str, column: str
+) -> bool:
+    return any(
+        _as_int(row[2]) == 1
+        and [
+            item[2]
+            for item in _fetchall(connection.execute(f"PRAGMA index_info({row[1]})"))
+        ]
+        == [column]
+        for row in _fetchall(connection.execute(f"PRAGMA index_list({table})"))
+    )
 
 
 def _canonical_layout_diagnostics(
     connection: sqlite3.Connection, *, require_metadata: bool = True
 ) -> tuple[str, ...]:
     diagnostics: list[str] = []
+    tables = _tables(connection)
     for table, expected in _CANONICAL_COLUMNS.items():
         if table == "my_auth_schema" and not require_metadata:
+            continue
+        if table == "passkey_enrollment_capabilities" and table not in tables:
             continue
         actual = tuple(
             (str(row[1]), str(row[2]).upper(), _as_int(row[3]), _as_int(row[5]), row[4])
@@ -126,17 +172,34 @@ def _canonical_layout_diagnostics(
     }
     if ("idx_passkey_challenges_expires_at", 0) not in indexes:
         diagnostics.append("missing index (idx_passkey_challenges_expires_at)")
-    user_indexes = _fetchall(connection.execute("PRAGMA index_list(passkey_users)"))
-    if not any(
-        _as_int(row[2]) == 1
-        and [
-            item[2]
-            for item in _fetchall(connection.execute(f"PRAGMA index_info({row[1]})"))
-        ]
-        == ["user_handle"]
-        for row in user_indexes
-    ):
+    if not _has_unique_column_index(connection, "passkey_users", "user_handle"):
         diagnostics.append("missing unique index (passkey_users.user_handle)")
+    if "passkey_enrollment_capabilities" in tables:
+        enrollment_indexes = {
+            (str(row[1]), _as_int(row[2]))
+            for row in _fetchall(
+                connection.execute("PRAGMA index_list(passkey_enrollment_capabilities)")
+            )
+        }
+        if (
+            "idx_passkey_enrollment_capabilities_expires_at",
+            0,
+        ) not in enrollment_indexes:
+            diagnostics.append(
+                "missing index (idx_passkey_enrollment_capabilities_expires_at)"
+            )
+        if not _has_unique_column_index(
+            connection, "passkey_enrollment_capabilities", "token_hash"
+        ):
+            diagnostics.append(
+                "missing unique index (passkey_enrollment_capabilities.token_hash)"
+            )
+        if not _has_unique_column_index(
+            connection, "passkey_enrollment_capabilities", "claimed_flow_id"
+        ):
+            diagnostics.append(
+                "missing unique index (passkey_enrollment_capabilities.claimed_flow_id)"
+            )
 
     foreign_keys = [
         tuple(row[2:7])
@@ -185,15 +248,22 @@ def _v2_layout_diagnostics(connection: sqlite3.Connection) -> tuple[str, ...]:
 def sqlite_schema_sql() -> str:
     return (
         "CREATE TABLE IF NOT EXISTS my_auth_schema (schema_version INTEGER NOT NULL);\n"
-        f"{PASSKEY_SQLITE_SCHEMA.strip()}\n\n{PASSKEY_SQLITE_CHALLENGE_SCHEMA.strip()}\n"
+        f"{PASSKEY_SQLITE_SCHEMA.strip()}\n\n{PASSKEY_SQLITE_CHALLENGE_SCHEMA.strip()}\n\n"
+        f"{PASSKEY_ENROLLMENT_CAPABILITY_SCHEMA.strip()}\n"
     )
 
 
-def _apply_schema(connection: sqlite3.Connection) -> None:
-    for statement in (
-        item.strip() for item in sqlite_schema_sql().split(";") if item.strip()
-    ):
+def _apply_statements(connection: sqlite3.Connection, sql: str) -> None:
+    for statement in (item.strip() for item in sql.split(";") if item.strip()):
         _ = connection.execute(statement)
+
+
+def _apply_schema(connection: sqlite3.Connection) -> None:
+    _apply_statements(connection, sqlite_schema_sql())
+
+
+def _apply_enrollment_schema(connection: sqlite3.Connection) -> None:
+    _apply_statements(connection, PASSKEY_ENROLLMENT_CAPABILITY_SCHEMA)
 
 
 def _validate_transaction_mode(transaction_mode: str) -> None:
@@ -351,6 +421,16 @@ def ensure_sqlite_schema(
         _ = connection.execute("PRAGMA foreign_keys = ON")
     state = inspect_sqlite_schema(connection)
     if state.state == "current":
+        if transaction_mode == "standalone":
+            _ = connection.execute("BEGIN IMMEDIATE")
+            try:
+                _apply_enrollment_schema(connection)
+                connection.commit()
+            except BaseException:
+                connection.rollback()
+                raise
+        else:
+            _apply_enrollment_schema(connection)
         return
     if state.state not in {"empty", "canonical_unversioned"}:
         raise UnsupportedSQLiteSchema(
@@ -363,6 +443,7 @@ def ensure_sqlite_schema(
             _ = connection.execute(
                 "CREATE TABLE IF NOT EXISTS my_auth_schema (schema_version INTEGER NOT NULL)"
             )
+            _apply_enrollment_schema(connection)
         _ = connection.execute("DELETE FROM my_auth_schema")
         _ = connection.execute(
             "INSERT INTO my_auth_schema(schema_version) VALUES (?)",
@@ -373,6 +454,7 @@ def ensure_sqlite_schema(
         _ = connection.execute("BEGIN IMMEDIATE")
         state = inspect_sqlite_schema(connection)
         if state.state == "current":
+            _apply_enrollment_schema(connection)
             connection.commit()
             return
         if state.state not in {"empty", "canonical_unversioned"}:
@@ -385,6 +467,7 @@ def ensure_sqlite_schema(
             _ = connection.execute(
                 "CREATE TABLE IF NOT EXISTS my_auth_schema (schema_version INTEGER NOT NULL)"
             )
+            _apply_enrollment_schema(connection)
         _ = connection.execute("DELETE FROM my_auth_schema")
         _ = connection.execute(
             "INSERT INTO my_auth_schema(schema_version) VALUES (?)",
@@ -450,6 +533,7 @@ def migrate_sqlite_schema(
             _ = connection.execute(
                 "ALTER TABLE passkey_challenges ADD COLUMN capability_id TEXT"
             )
+            _apply_enrollment_schema(connection)
             _ = connection.execute("UPDATE my_auth_schema SET schema_version=3")
             if transaction_mode == "standalone":
                 connection.commit()
@@ -578,6 +662,7 @@ def migrate_sqlite_schema(
             "CREATE TABLE my_auth_schema (schema_version INTEGER NOT NULL)"
         )
         _ = connection.execute("INSERT INTO my_auth_schema VALUES (3)")
+        _apply_enrollment_schema(connection)
         if _fetchone(connection.execute("PRAGMA foreign_key_check")) is not None:
             raise SQLiteSchemaError("foreign key check failed during migration")
         if transaction_mode == "standalone":
@@ -591,6 +676,7 @@ def migrate_sqlite_schema(
 
 __all__ = [
     "CURRENT_SCHEMA_VERSION",
+    "PASSKEY_ENROLLMENT_CAPABILITY_SCHEMA",
     "SQLiteSchemaError",
     "UnsupportedSQLiteSchema",
     "SQLiteSchemaInspection",
