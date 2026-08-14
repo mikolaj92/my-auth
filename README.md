@@ -22,9 +22,9 @@ Pin an immutable 0.4.x tag. Untagged `main` previously advertised `0.5.0`,
 which the multi-user BOM forbids. Hosts should keep `my-auth>=0.4,<0.5` and
 must not mix 0.5.x.
 
-This repository uses app-factory tag `v0.5.21` to test the optional HTMX
+This repository uses app-factory tag `v0.6.5` to test the optional HTMX
 adapter. It is a library, not a production host using `app-factory[platform]`,
-so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.5.21/COMPAT.md)
+so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.6.5/COMPAT.md)
 does not define this package's version. The published `fastapi-htmx` extra
 continues to accept compatible `app-factory>=0.5` releases.
 
