@@ -1,0 +1,42 @@
+{
+  "paths": [
+    "pyproject.toml",
+    "uv.lock",
+    "README.md",
+    "tests/test_fastapi_htmx_adapter.py"
+  ],
+  "source": "refined-after-inspection",
+  "seed_paths": [
+    "src/my_auth/__init__.py",
+    "src/my_auth/challenges.py",
+    "src/my_auth/credentials.py",
+    "src/my_auth/enrollment.py",
+    "src/my_auth/fastapi.py",
+    "src/my_auth/fastapi_htmx/__init__.py",
+    "src/my_auth/fastapi_htmx/config.py",
+    "src/my_auth/fastapi_htmx/i18n.py",
+    "src/my_auth/fastapi_htmx/router.py",
+    "src/my_auth/fastapi_htmx/static.py",
+    "src/my_auth/fastapi_htmx/templates.py",
+    "src/my_auth/passkeys.py",
+    "src/my_auth/sqlite_schema.py",
+    "src/my_auth/testing.py",
+    "omo/plans/fastapi-adapter.md",
+    "tests/test_credential_management.py",
+    "tests/test_enrollment_capabilities.py",
+    "tests/test_fastapi_adapter.py",
+    "tests/test_fastapi_htmx_adapter.py",
+    "tests/test_guarded_deletion.py",
+    "tests/test_passkeys.py"
+  ],
+  "matched_tokens": ["auth", "plan"],
+  "notes": [
+    "Deterministic localize matched adapter sources via auth/plan tokens.",
+    "Inspection: issue is a 0.4.x packaging pin (v0.4.2 -> 0.4.3, app-factory v0.6.3 -> v0.6.5).",
+    "Refined paths are packaging + the existing pin-lock contract test.",
+    "Do not mix main 0.5.0 source into this release."
+  ],
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__my-auth/ai__fix__61-linia-0.4.x-gniazduje-app-factory-v0.6.3-568ffb20",
+  "wrote": true,
+  "localize_rel": ".lokay/localize.json"
+}
