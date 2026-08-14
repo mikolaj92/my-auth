@@ -1,0 +1,19 @@
+{
+  "paths": [
+    "pyproject.toml",
+    "uv.lock",
+    "README.md",
+    "tests/test_fastapi_htmx_adapter.py"
+  ],
+  "source": "inspection",
+  "seed_paths": [],
+  "matched_tokens": ["app-factory", "v0.6.3", "v0.6.5", "0.4.3"],
+  "notes": [
+    "Issue #61 is 0.4.x packaging: bump my-auth to 0.4.3 and pin app-factory v0.6.5.",
+    "Agentless seed listed 0.5.0 adapter sources on main; those are out of scope.",
+    "Branch reset to tag v0.4.2. Extra stays app-factory[fastapi]>=0.5."
+  ],
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__my-auth/ai__fix__61-linia-0.4.x-gniazduje-app-factory-v0.6.3-568ffb20",
+  "wrote": true,
+  "localize_rel": ".lokay/localize.json"
+}
