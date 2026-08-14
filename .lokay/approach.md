@@ -1,34 +1,37 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/my-auth issue=63 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/my-auth issue=61 -->
 
 Repository: `mikolaj92/my-auth`  
-Issue: #63 — main instaluje 0.5.0, BOM zakazuje 0.5.x
+Issue: #61 — Linia 0.4.x gniazduje app-factory v0.6.3, BOM jest v0.6.5
 
 ## Goal
 
-Stop advertising the forbidden 0.5.x line from main. COMPAT/BOM keep my-auth 0.4.x and must not mix 0.5.x. Untagged `uv add` from main currently installs `version = "0.5.0"`.
+BOM chrome to app-factory **v0.6.5**. Tag **v0.4.2** nadal gniazduje v0.6.3, więc sam kit testuje się na starym chrome.
 
 ## Files likely touched
 
-- `pyproject.toml` — restamp package as 0.4.4 (0.4.x; avoid colliding with 0.4.3 on the v0.4.2 maintenance line)
-- `uv.lock` — keep local package version in lock with pyproject
-- `README.md` — pin install examples to tag `v0.4.2`; document `>=0.4,<0.5`; align chrome pin docs to `v0.5.21`
-- `tests/test_fastapi_adapter.py` — fail closed if package/docs drift back to 0.5.x or untagged main install
+- `pyproject.toml` — `[tool.uv.sources]` app-factory tag `v0.6.5`
+- `uv.lock` — relock the test pin
+- `README.md` — document the HTMX test chrome tag
+- `tests/test_fastapi_htmx_adapter.py` — pin/lock contract
+
+Keep package version on **0.4.x** (currently 0.4.4). Do not advertise 0.5.x.
+`fastapi-htmx` extra stays `app-factory[fastapi]>=0.5`.
 
 ## Test plan
 
-- `uv lock --check`
-- `uv run --frozen pytest tests/test_fastapi_adapter.py tests/test_fastapi_htmx_adapter.py`
+- `uv lock --upgrade-package app-factory`
+- `pytest tests/test_fastapi_htmx_adapter.py tests/test_fastapi_adapter.py`
 
 ## Non-goals
 
-- Do not change adapter/schema/UI behavior.
-- Do not mix this with #61 (0.4.2 → app-factory v0.6.5 on the maintenance line) or #62 (`initialize()`).
-- Keep the repository chrome pin at app-factory `v0.5.21`.
+- Do not mix main 0.5.0 / 0.5.x packaging
+- Do not rewrite product orchestration, document pipelines, or chrome inside my-auth
 
 ## Notes
 
 - Trust intentional issue; this plan is evidence for later review, not a human gate.
 - Coding agent may refine details but should stay on the stated goal and non-goals.
 - Collector boundary: if implementation introduces unbounded collection, ship only a bounded collector patch that starts durably in the background after merge. The coding agent and mill must not populate data or wait for collection to finish.
+- No explicit file paths in issue; infer from repo inspection.
