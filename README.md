@@ -1,8 +1,8 @@
 # my-auth
 
 `my-auth` is a passkey-only authentication core for FastAPI/Starlette
-applications. Version 0.2 uses verification-first registration and explicit,
-versioned SQLite schema ownership.
+applications. Version 0.4 uses verification-first registration and explicit,
+versioned SQLite schema ownership. Keep this 0.4.x line; do not mix 0.5.x.
 
 The package provides RP configuration, WebAuthn options and verification,
 single-use TTL challenges, passkey models, atomic credential registration,
@@ -13,14 +13,18 @@ user models, or audit policy.
 ## Install and imports
 
 ```sh
-uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"
-uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git"
-uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git"
+uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git@v0.4.2"
+uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git@v0.4.2"
+uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.4.2"
 ```
 
-This repository uses app-factory tag `v0.5.19` to test the optional HTMX
+Pin an immutable 0.4.x tag. Untagged `main` previously advertised `0.5.0`,
+which the multi-user BOM forbids. Hosts should keep `my-auth>=0.4,<0.5` and
+must not mix 0.5.x.
+
+This repository uses app-factory tag `v0.5.21` to test the optional HTMX
 adapter. It is a library, not a production host using `app-factory[platform]`,
-so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.5.19/COMPAT.md)
+so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.5.21/COMPAT.md)
 does not define this package's version. The published `fastapi-htmx` extra
 continues to accept compatible `app-factory>=0.5` releases.
 

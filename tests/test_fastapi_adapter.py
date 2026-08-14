@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, Request, Response
@@ -16,6 +18,27 @@ from my_auth import (
     VerifiedRegistration,
 )
 from my_auth.fastapi import PasskeyAuthRouter, PasskeyCookies, PasskeyRouteHooks
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_package_stays_on_bom_allowed_04x_line() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    version = project["project"]["version"]
+    package = next(
+        item for item in lock["package"] if item["name"] == "my-auth"
+    )
+
+    assert version.startswith("0.4.")
+    assert not version.startswith("0.5.")
+    assert package["version"] == version
+    assert "@v0.4.2" in readme
+    assert "git+https://github.com/mikolaj92/my-auth.git@v0.4.2" in readme
+    assert 'uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"\n' not in readme
+    assert "do not mix 0.5.x" in readme
+    assert "my-auth>=0.4,<0.5" in readme
 
 
 def _app(

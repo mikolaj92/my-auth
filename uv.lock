@@ -399,7 +399,7 @@ wheels = [
 
 [[package]]
 name = "my-auth"
-version = "0.5.0"
+version = "0.4.4"
 source = { editable = "." }
 dependencies = [
     { name = "typing-extensions" },
