@@ -34,8 +34,8 @@ def test_package_stays_on_bom_allowed_04x_line() -> None:
     assert version.startswith("0.4.")
     assert not version.startswith("0.5.")
     assert package["version"] == version
-    assert "@v0.4.2" in readme
-    assert "git+https://github.com/mikolaj92/my-auth.git@v0.4.2" in readme
+    assert "@v0.4.4" in readme
+    assert "git+https://github.com/mikolaj92/my-auth.git@v0.4.4" in readme
     assert 'uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"\n' not in readme
     assert "do not mix 0.5.x" in readme
     assert "my-auth>=0.4,<0.5" in readme
