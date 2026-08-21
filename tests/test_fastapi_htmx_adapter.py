@@ -180,18 +180,21 @@ def test_login_and_register_templates_wrap_panel_in_passkey_shell() -> None:
 
 
 def test_packaged_pages_use_app_factory_shell_not_legacy_standalone_base() -> None:
-    """Embedded UI extends app-factory/shell.html; legacy base.html is gone."""
+    """Login/register stay on shell.html; ceremony pages use identity shells."""
     templates = REPO_ROOT / "src/my_auth/fastapi_htmx/templates"
     assert not (templates / "base.html").exists()
-    for name in (
-        "login.html",
-        "register.html",
-        "credential_management.html",
-        "capability_registration.html",
-    ):
+    for name in ("login.html", "register.html"):
         html = (templates / name).read_text(encoding="utf-8")
         assert '{% extends "app_factory/shell.html" %}' in html
         assert "Legacy standalone shell" not in html
+    capability = (templates / "capability_registration.html").read_text(encoding="utf-8")
+    assert '{% extends "app_factory/identity_public_shell.html" %}' in capability
+    assert "{% block identity_panel %}" in capability
+    assert "app_factory/identity_public_state.html" in capability
+    assert 'data-platform-identity-ceremony' in capability
+    credentials = (templates / "credential_management.html").read_text(encoding="utf-8")
+    assert '{% extends "app_factory/identity_authenticated_shell.html" %}' in credentials
+    assert 'data-platform-identity-ceremony="credentials"' in credentials
 
 
 def test_passkey_panels_use_basecoat_button_and_field_conventions() -> None:
