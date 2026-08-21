@@ -11,6 +11,7 @@ from app_factory.fastapi import (
     AppFactoryUiConflict,
     install_app_factory_ui,
 )
+from app_factory.platform import PlatformConfig, apply_platform_context
 from my_auth.fastapi import PasskeyAuthRouter, PasskeyRouteHooks
 
 from .config import PasskeyUiConfig
@@ -75,6 +76,10 @@ def install_passkey_ui(
         static_path=platform.static_path,
         mount_name=platform.mount_name,
     )
+    # Identity shells need platform_paths. Hosts that already called
+    # apply_platform_context keep their config; kit-only installs get defaults.
+    if "platform_paths" not in environment.globals:
+        apply_platform_context(environment, PlatformConfig())
     renderer = PasskeyTemplateRenderer(environment=environment, config=resolved_config)
     wrapped_hooks = PasskeyRouteHooks(
         get_session_user=hooks.get_session_user,
