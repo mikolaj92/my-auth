@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "my-auth"
-version = "0.4.5"
+version = "0.4.6"
 description = "Minimal reusable passkey helpers for Python web apps"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,7 +29,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-app-factory = { git = "https://github.com/mikolaj92/app-factory", tag = "v0.6.6" }
+app-factory = { git = "https://github.com/mikolaj92/app-factory", tag = "v0.6.11" }
 
 [dependency-groups]
 dev = [
