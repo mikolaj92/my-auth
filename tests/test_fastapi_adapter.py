@@ -31,14 +31,18 @@ def test_package_stays_on_bom_allowed_04x_line() -> None:
         item for item in lock["package"] if item["name"] == "my-auth"
     )
 
+    app_factory_tag = project["tool"]["uv"]["sources"]["app-factory"]["tag"]
+
     assert version.startswith("0.4.")
     assert not version.startswith("0.5.")
     assert package["version"] == version
-    assert "@v0.4.5" in readme
-    assert "git+https://github.com/mikolaj92/my-auth.git@v0.4.5" in readme
+    assert f"@v{version}" in readme
+    assert f"git+https://github.com/mikolaj92/my-auth.git@v{version}" in readme
     assert 'uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"\n' not in readme
     assert "do not mix 0.5.x" in readme
     assert "my-auth>=0.4,<0.5" in readme
+    assert f"app-factory tag `{app_factory_tag}`" in readme
+    assert f"blob/{app_factory_tag}/COMPAT.md" in readme
 
 
 def _app(
