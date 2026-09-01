@@ -65,6 +65,7 @@ _COPY: dict[str, dict[str, str]] = {
         "loading": "Loading…",
         "js_login_success": "Passkey sign-in succeeded.",
         "js_register_success": "Passkey registration succeeded.",
+        "js_insecure_context": "Passkeys require a secure HTTPS connection.",
         "js_unsupported": (
             "This browser does not support WebAuthn passkeys with PublicKeyCredential."
         ),
@@ -137,6 +138,9 @@ _COPY: dict[str, dict[str, str]] = {
         "loading": "Ładowanie…",
         "js_login_success": "Logowanie kluczem dostępu powiodło się.",
         "js_register_success": "Rejestracja klucza dostępu powiodła się.",
+        "js_insecure_context": (
+            "Klucze dostępu wymagają bezpiecznego połączenia HTTPS."
+        ),
         "js_unsupported": (
             "Ta przeglądarka nie obsługuje kluczy WebAuthn (PublicKeyCredential)."
         ),
@@ -210,6 +214,9 @@ _COPY: dict[str, dict[str, str]] = {
         "loading": "Laden…",
         "js_login_success": "Passkey-Anmeldung erfolgreich.",
         "js_register_success": "Passkey-Registrierung erfolgreich.",
+        "js_insecure_context": (
+            "Passkeys erfordern eine sichere HTTPS-Verbindung."
+        ),
         "js_unsupported": (
             "Dieser Browser unterstützt keine WebAuthn-Passkeys (PublicKeyCredential)."
         ),

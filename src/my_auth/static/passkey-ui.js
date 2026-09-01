@@ -3,6 +3,7 @@ import { loginPasskey, registerPasskey } from "./passkey.js";
 const defaultMessages = {
   js_login_success: "Passkey sign-in succeeded.",
   js_register_success: "Passkey registration succeeded.",
+  js_insecure_context: "Passkeys require a secure HTTPS connection.",
   js_unsupported:
     "This browser does not support WebAuthn passkeys with PublicKeyCredential.",
   js_waiting_prompt: "Waiting for your passkey prompt.",
@@ -54,6 +55,10 @@ function setStatus(form, message, state) {
 }
 
 function assertWebAuthnSupport(form) {
+  if (!window.isSecureContext) {
+    setStatus(form, messages.js_insecure_context, "error");
+    return false;
+  }
   if (window.PublicKeyCredential && navigator.credentials) return true;
   setStatus(form, messages.js_unsupported, "error");
   return false;
