@@ -13,20 +13,20 @@ user models, or audit policy.
 ## Install and imports
 
 ```sh
-uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git@v0.4.7"
-uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git@v0.4.7"
-uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.4.7"
+uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git@v0.4.8"
+uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git@v0.4.8"
+uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.4.8"
 ```
 
 Pin an immutable 0.4.x tag. **Do not pin `v0.5.0`: that invalid historical
 tag is retired and is incompatible with the multi-user BOM.** Hosts should
 keep `my-auth>=0.4,<0.5` and must not mix 0.5.x.
 
-This repository uses app-factory tag `v0.6.11` to test the optional HTMX
+This repository uses app-factory tag `v0.6.14` to test the optional HTMX
 adapter. It is a library, not a production host using `app-factory[platform]`,
-so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.6.11/COMPAT.md)
+so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.6.14/COMPAT.md)
 does not define this package's version. The published `fastapi-htmx` extra
-continues to accept compatible `app-factory>=0.5` releases.
+requires the compatible `app-factory>=0.6.14` generation.
 
 The core import is `my_auth`. The FastAPI router is explicitly imported from
 `my_auth.fastapi`; the server-rendered UI is explicitly imported from
