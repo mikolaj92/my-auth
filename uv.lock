@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -399,7 +399,7 @@ wheels = [
 
 [[package]]
 name = "my-auth"
-version = "0.4.6"
+version = "0.4.7"
 source = { editable = "." }
 dependencies = [
     { name = "typing-extensions" },
