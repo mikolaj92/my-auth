@@ -18,9 +18,9 @@ uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git@v0.4.6"
 uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.4.6"
 ```
 
-Pin an immutable 0.4.x tag. Untagged `main` previously advertised `0.5.0`,
-which the multi-user BOM forbids. Hosts should keep `my-auth>=0.4,<0.5` and
-must not mix 0.5.x.
+Pin an immutable 0.4.x tag. **Do not pin `v0.5.0`: that invalid historical
+tag is retired and is incompatible with the multi-user BOM.** Hosts should
+keep `my-auth>=0.4,<0.5` and must not mix 0.5.x.
 
 This repository uses app-factory tag `v0.6.11` to test the optional HTMX
 adapter. It is a library, not a production host using `app-factory[platform]`,
