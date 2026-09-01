@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import sqlite3
 import threading
 from datetime import UTC, datetime
@@ -23,6 +24,11 @@ from my_auth.testing import (
     assert_challenge_store_contract,
     assert_credential_store_contract,
 )
+
+
+def test_legacy_store_modules_are_not_packaged() -> None:
+    assert importlib.util.find_spec("my_auth.credentials") is None
+    assert importlib.util.find_spec("my_auth.challenges") is None
 
 
 def test_memory_stores_satisfy_passkey_contracts() -> None:
