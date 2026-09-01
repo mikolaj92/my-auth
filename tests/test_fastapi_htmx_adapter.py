@@ -306,7 +306,7 @@ def test_testclient_smoke_pages_and_package_js() -> None:
     assert "export async function loginPasskey" in package_javascript.text
     assert "export async function registerPasskey" in package_javascript.text
     assert (
-        files("my_auth").joinpath("static/passkey.js").read_text()
+        files("my_auth.fastapi_htmx").joinpath("static/passkey.js").read_text()
         == package_javascript.text
     )
 
