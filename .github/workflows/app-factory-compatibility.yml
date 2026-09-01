@@ -14,7 +14,17 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
       - name: Check lockfile
         run: uv lock --check
       - name: Run adapter suite
         run: uv run --frozen pytest tests/test_fastapi_htmx_adapter.py
+      - name: Install browser test dependencies
+        run: npm ci
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium webkit
+      - name: Run browser suite
+        run: npm run test:browser

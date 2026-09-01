@@ -556,6 +556,7 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "app_lang=pl" in pl.headers.get("set-cookie", "")
     assert 'id="passkey-ui-messages"' in pl.text
     assert "js_waiting_prompt" in pl.text
+    assert "js_insecure_context" in pl.text
 
     en = client.get("/login?lang=en")
     assert en.status_code == 200
@@ -564,6 +565,7 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Continue with passkey" in en.text
     assert "Sign in with a phone (QR code)" in en.text
     assert "No account? Create one" in en.text
+    assert "Passkeys require a secure HTTPS connection." in en.text
     assert "Zaloguj się bez hasła" not in en.text
     assert "app_lang=en" in en.headers.get("set-cookie", "")
 
@@ -574,6 +576,7 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Mit Passkey fortfahren" in de.text
     assert "Mit einem Telefon anmelden (QR-Code)" in de.text
     assert "Noch kein Konto? Passkey registrieren" in de.text
+    assert "Passkeys erfordern eine sichere HTTPS-Verbindung." in de.text
     assert "Sign in without a password" not in de.text
     assert "app_lang=de" in de.headers.get("set-cookie", "")
 
