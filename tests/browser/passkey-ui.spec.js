@@ -78,6 +78,16 @@ test("explains the HTTPS requirement when WebAuthn is hidden by an insecure cont
 });
 
 test("keeps the neutral state when WebAuthn is available on a trusted origin", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "PublicKeyCredential", {
+      configurable: true,
+      value: function PublicKeyCredential() {},
+    });
+    Object.defineProperty(navigator, "credentials", {
+      configurable: true,
+      value: {},
+    });
+  });
   await installRoutes(page);
 
   await page.goto("http://localhost/login");
