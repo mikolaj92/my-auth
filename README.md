@@ -112,19 +112,42 @@ per operation.
 `PasskeyRouteHooks` requires these callbacks:
 
 - `get_session_user(request)` — current host session user, or `None`;
-- `prepare_registration(request, display_name)` — legacy-compatible bootstrap policy/profile step;
-- `prepare_registration_context(request, flow_id, username)` — preferred typed resolver for bootstrap, invitation, or recovery; it must resolve one concrete `PasskeyUser` and may bind a claimed capability to the allocated flow;
+- `prepare_registration(request, username)` — legacy-compatible neutral
+  self-registration subject preparation;
+- `prepare_registration_context(request, flow_id, username)` — preferred typed
+  resolver for neutral self-registration; it must resolve one concrete
+  `PasskeyUser` and may apply the host's enrollment rules before returning;
 - `complete_registration(request, verified)` — durable host completion, returning
   an `AuthUser` or `None`;
-- `get_auth_user(user_id)`, `login(response, request, user)`, `logout(response, request)`;
-Authenticated registration is always typed as `additional_credential` and derives its subject exclusively from `get_session_user`; request identity fields cannot retarget it. Anonymous typed resolvers return `RegistrationContext(kind=...)`. Invitation and recovery contexts require a capability id and can be constructed with `registration_context_from_capability(...)`, which validates capability purpose and subject. Configure `prepare_capability_registration_context(request, flow_id, kind, capability)` to claim the opaque token for that flow. The shared HTMX adapter exposes distinct `PasskeyPaths.activation_page` (`/activate`) and `recovery_page` (`/recover`) surfaces; they submit only the opaque capability and flow kind, render the same non-enumerating invalid state for missing or unusable links, and support locale plus separate activation/recovery success URLs. The resolved context is persisted with the WebAuthn challenge and returned unchanged in `VerifiedRegistration.context`. Existing hosts may keep `prepare_registration`; it maps explicitly to `bootstrap` and does not infer bootstrap from credential-store emptiness.
+- `get_auth_user(user_id)`, `login(response, request, user)`,
+  `logout(response, request)`, `render_login(request)`, and
+  `render_register(request)`.
 
-- `registration_allowed(request)`, `render_login(request)`, and
-  `render_register(request, *, bootstrap)`.
+Authenticated registration is always typed as `additional_credential` and
+gets its subject only from `get_session_user`; request identity fields cannot
+retarget it. Anonymous typed resolvers return a subject-bound
+`RegistrationContext(kind="self_registration", ...)`. Invitation and recovery
+contexts require a capability id and can be constructed with
+`registration_context_from_capability(...)`, which validates capability purpose
+and subject. Configure `prepare_capability_registration_context(request,
+flow_id, kind, capability)` to claim the opaque token for that flow.
+
+The host owns enrollment policy. It decides whether to expose, hide, protect,
+or redirect a registration route and rejects enrollment before returning a
+registration context. `my-auth` does not model open/closed registration, a
+first user, or administrator bootstrap. Its router only performs a ceremony for
+the explicit subject/context prepared by the host.
+
+The shared HTMX adapter exposes distinct `PasskeyPaths.activation_page`
+(`/activate`) and `recovery_page` (`/recover`) surfaces. They submit only the
+opaque capability and flow kind, render the same non-enumerating invalid state
+for missing or unusable links, and support locale plus separate
+activation/recovery success URLs. The resolved context is persisted with the
+WebAuthn challenge and returned unchanged in `VerifiedRegistration.context`.
+The legacy `prepare_registration` path maps to neutral `self_registration`.
 
 Every callback may be synchronous or asynchronous. The router awaits either
-form. Registration policy is checked before options and again before verify;
-then the router verifies, calls durable completion, logs the user in, and calls
+form. It verifies, calls durable completion, logs the user in, and calls
 `after_register` as an observer. A `None` completion denies registration and
 prevents login. Observer failures are logged and do not turn an otherwise
 successful login or registration into a 500. Login and registration use
@@ -147,7 +170,6 @@ hooks = PasskeyFastAPIHooks(
     get_auth_user=get_auth_user,
     login=login,
     logout=logout,
-    registration_allowed=registration_allowed,
     render_login=render_login,
     render_register=render_register,
 )
@@ -207,7 +229,7 @@ other sensitive registration data are never rendered.
 | Passkey tables and auth schema version/migration | `my-auth` (or the shared `SQLiteAuthDatabase` owner) |
 | Local users, external identity links, roles, grants, audit rows | host / `my-usermanager` |
 | Application sessions, app cookies, CSRF, logout effects | host application |
-| Registration policy and local provisioning | host callback |
+| Enrollment routing, policy, and local provisioning | host / user-management layer |
 | Atomic verified registration across passkey + UM records | shared transaction owner |
 | Observer side effects (`after_register`, `after_login`) | host callback; failures are non-fatal |
 

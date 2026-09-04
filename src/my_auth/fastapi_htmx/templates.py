@@ -25,10 +25,10 @@ class PasskeyTemplateRenderer:
     config: PasskeyUiConfig
 
     async def render_login(self, request: Request) -> Response:
-        return await self._render("login.html", request, bootstrap=False)
+        return await self._render("login.html", request)
 
-    async def render_register(self, request: Request, *, bootstrap: bool) -> Response:
-        return await self._render("register.html", request, bootstrap=bootstrap)
+    async def render_register(self, request: Request) -> Response:
+        return await self._render("register.html", request)
 
     async def render_credential_management(
         self, request: Request, *, credentials: Sequence[PasskeyCredential]
@@ -36,7 +36,6 @@ class PasskeyTemplateRenderer:
         return await self._render(
             "credential_management.html",
             request,
-            bootstrap=False,
             credentials=list(credentials),
         )
 
@@ -50,23 +49,19 @@ class PasskeyTemplateRenderer:
         return await self._render(
             "capability_registration.html",
             request,
-            bootstrap=False,
             registration_kind=kind,
             capability=capability,
         )
 
     async def render_account_panel(self, request: Request) -> str:
         """Render the packaged registration UI for a signed-in account page."""
-        return await self._render_content(
-            "account_panel.html", request, bootstrap=False
-        )
+        return await self._render_content("account_panel.html", request)
 
     async def _render_content(
         self,
         template_name: str,
         request: Request,
         *,
-        bootstrap: bool,
         registration_kind: Literal["invitation", "recovery"] | None = None,
         capability: str | None = None,
         credentials: list[PasskeyCredential] | None = None,
@@ -85,7 +80,6 @@ class PasskeyTemplateRenderer:
         return self.environment.get_template(template_name).render(
             request=request,
             paths=self.config.paths,
-            bootstrap=bootstrap,
             passkey_js_url=f"{static_base}/passkey-ui.js",
             passkey_css_url=f"{static_base}/passkey-ui.css",
             csrf_header_name=self.config.csrf_header_name,
@@ -96,13 +90,6 @@ class PasskeyTemplateRenderer:
             capability=capability if capability_valid else None,
             capability_valid=capability_valid,
             credentials=credentials or [],
-            show_registration_link=await _maybe_await(
-                self.config.show_registration_link(request)
-            ),
-            registration_link_url=(
-                await _maybe_await(self.config.registration_link_url(request))
-                or self.config.paths.register_page
-            ),
             login_error_target_id=self.config.login_error_target_id,
             register_error_target_id=self.config.register_error_target_id,
             # Drive app-factory shell lang + flag dropdown selected state.
@@ -118,7 +105,6 @@ class PasskeyTemplateRenderer:
         template_name: str,
         request: Request,
         *,
-        bootstrap: bool,
         registration_kind: Literal["invitation", "recovery"] | None = None,
         capability: str | None = None,
         credentials: list[PasskeyCredential] | None = None,
@@ -126,7 +112,6 @@ class PasskeyTemplateRenderer:
         content = await self._render_content(
             template_name,
             request,
-            bootstrap=bootstrap,
             registration_kind=registration_kind,
             capability=capability,
             credentials=credentials,

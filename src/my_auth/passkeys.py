@@ -29,7 +29,6 @@ from webauthn.helpers.structs import (
 
 ChallengeKind = Literal["registration", "authentication"]
 RegistrationKind = Literal[
-    "bootstrap",
     "self_registration",
     "invitation",
     "additional_credential",
@@ -104,7 +103,7 @@ def _origin_allowed(origin: str) -> bool:
     ):
         return False
     try:
-        parsed.port
+        _ = parsed.port
     except ValueError:
         return False
     return parsed.scheme == "https" or (
@@ -195,11 +194,14 @@ class RegistrationContext:
     def __post_init__(self) -> None:
         if self.kind in {"invitation", "recovery"} and not self.capability_id:
             raise ValueError(f"{self.kind} registration requires a capability")
-        if self.kind in {
-            "bootstrap",
-            "self_registration",
-            "additional_credential",
-        } and self.capability_id:
+        if (
+            self.kind
+            in {
+                "self_registration",
+                "additional_credential",
+            }
+            and self.capability_id
+        ):
             raise ValueError(f"{self.kind} registration cannot use a capability")
 
 
@@ -976,7 +978,7 @@ class PasskeyService:
         if context is None:
             if user is None:
                 raise ValueError("registration user or context is required")
-            context = RegistrationContext(kind="bootstrap", user=user)
+            context = RegistrationContext(kind="self_registration", user=user)
         elif user is not None and user != context.user:
             raise ValueError("registration user does not match context")
         user = context.user
@@ -1018,7 +1020,9 @@ class PasskeyService:
         else:
             credential_data = json.loads(credential)
             if not isinstance(credential_data, dict):
-                raise ValueError("credential JSON must be an object")
+                raise ValueError(  # noqa: TRY004 - preserve public exception contract
+                    "credential JSON must be an object"
+                )
         verified = verify_registration_response(
             credential=credential_data,
             expected_challenge=record.challenge,
@@ -1076,7 +1080,9 @@ class PasskeyService:
         else:
             credential_data = json.loads(credential)
             if not isinstance(credential_data, dict):
-                raise ValueError("credential JSON must be an object")
+                raise ValueError(  # noqa: TRY004 - preserve public exception contract
+                    "credential JSON must be an object"
+                )
         credential_id = _credential_id_from_response(credential_data)
         stored = self.credentials.get_credential(credential_id)
         if stored is None:

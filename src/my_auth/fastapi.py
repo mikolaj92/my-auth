@@ -14,7 +14,6 @@ from webauthn.helpers.exceptions import WebAuthnException
 
 from .passkeys import (
     AuthenticationResult,
-    b64url_to_bytes,
     ChallengeNotFound,
     ChallengeStore,
     CredentialMutationDenied,
@@ -27,6 +26,7 @@ from .passkeys import (
     RegistrationContext,
     UserHandleMismatch,
     VerifiedRegistration,
+    b64url_to_bytes,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,9 +37,7 @@ MaybeAwaitable = T | Awaitable[T]
 
 
 class RenderRegister(Protocol):
-    def __call__(
-        self, request: Request, *, bootstrap: bool
-    ) -> MaybeAwaitable[Response]: ...
+    def __call__(self, request: Request) -> MaybeAwaitable[Response]: ...
 
 
 class RenderCredentialManagement(Protocol):
@@ -139,7 +137,6 @@ class PasskeyRouteHooks:
     get_auth_user: Callable[[str], MaybeAwaitable[AuthUser | None]]
     login: Callable[[Response, Request, AuthUser], MaybeAwaitable[None]]
     logout: Callable[[Response, Request], MaybeAwaitable[None]]
-    registration_allowed: Callable[[Request], MaybeAwaitable[bool]]
     render_login: Callable[[Request], MaybeAwaitable[Response]]
     render_register: RenderRegister
     after_register: Callable[
@@ -148,18 +145,21 @@ class PasskeyRouteHooks:
     after_login: Callable[
         [Request, AuthUser, PasskeyCredential], MaybeAwaitable[None]
     ] = field(default=lambda _request, _user, _credential: None)
-    prepare_registration_context: Callable[
-        [Request, str, str], MaybeAwaitable[RegistrationContext]
-    ] | None = None
-    prepare_capability_registration_context: Callable[
-        [Request, str, Literal["invitation", "recovery"], str],
-        MaybeAwaitable[RegistrationContext],
-    ] | None = None
+    prepare_registration_context: (
+        Callable[[Request, str, str], MaybeAwaitable[RegistrationContext]] | None
+    ) = None
+    prepare_capability_registration_context: (
+        Callable[
+            [Request, str, Literal["invitation", "recovery"], str],
+            MaybeAwaitable[RegistrationContext],
+        ]
+        | None
+    ) = None
     render_capability_registration: RenderCapabilityRegistration | None = None
     render_credential_management: RenderCredentialManagement | None = None
-    allow_final_credential_removal: Callable[
-        [Request, PasskeyUser], MaybeAwaitable[bool]
-    ] | None = None
+    allow_final_credential_removal: (
+        Callable[[Request, PasskeyUser], MaybeAwaitable[bool]] | None
+    ) = None
 
 
 PasskeyFastAPIHooks = PasskeyRouteHooks
@@ -179,7 +179,7 @@ class PasskeyFastAPISettings:
     @classmethod
     def from_env(
         cls, environ: Mapping[str, str] | None = None, *, prefix: str = "PASSKEY_"
-    ) -> "PasskeyFastAPISettings":
+    ) -> PasskeyFastAPISettings:
         env = os.environ if environ is None else environ
         settings = cls(
             rp_id=_required_env(env, prefix, "RP_ID"),
@@ -334,10 +334,7 @@ class PasskeyAuthRouter:
         return await _maybe_await(self.hooks.render_login(request))
 
     async def register_page(self, request: Request) -> Response:
-        user = await _maybe_await(self.hooks.get_session_user(request))
-        return await _maybe_await(
-            self.hooks.render_register(request, bootstrap=user is None)
-        )
+        return await _maybe_await(self.hooks.render_register(request))
 
     async def credentials_page(self, request: Request) -> Response:
         user = await self._require_session_user(request)
@@ -345,13 +342,9 @@ class PasskeyAuthRouter:
         if renderer is None:
             raise HTTPException(status_code=404, detail="not found")
         credentials = self.service.list_credentials(user_id=user.user_id)
-        return await _maybe_await(
-            renderer(request, credentials=credentials)
-        )
+        return await _maybe_await(renderer(request, credentials=credentials))
 
-    async def credential_label(
-        self, request: Request, credential_id: str
-    ) -> Response:
+    async def credential_label(self, request: Request, credential_id: str) -> Response:
         user = await self._require_session_user(request)
         body = await _json_body(request)
         label = body.get("label")
@@ -366,12 +359,12 @@ class PasskeyAuthRouter:
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         except CredentialNotFound as error:
-            raise HTTPException(status_code=404, detail="credential not found") from error
+            raise HTTPException(
+                status_code=404, detail="credential not found"
+            ) from error
         return await self.credentials_page(request)
 
-    async def credential_remove(
-        self, request: Request, credential_id: str
-    ) -> Response:
+    async def credential_remove(self, request: Request, credential_id: str) -> Response:
         user = await self._require_session_user(request)
         allow_final = False
         if self.hooks.allow_final_credential_removal is not None:
@@ -385,7 +378,9 @@ class PasskeyAuthRouter:
                 allow_final=allow_final,
             )
         except CredentialNotFound as error:
-            raise HTTPException(status_code=404, detail="credential not found") from error
+            raise HTTPException(
+                status_code=404, detail="credential not found"
+            ) from error
         except CredentialMutationDenied as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return await self.credentials_page(request)
@@ -409,9 +404,7 @@ class PasskeyAuthRouter:
         if renderer is None:
             raise HTTPException(status_code=404, detail="not found")
         capability = request.query_params.get("capability")
-        return await _maybe_await(
-            renderer(request, kind=kind, capability=capability)
-        )
+        return await _maybe_await(renderer(request, kind=kind, capability=capability))
 
     async def login_options(self) -> Response:
         flow_id = self._new_flow_id()
@@ -445,10 +438,6 @@ class PasskeyAuthRouter:
         return response
 
     async def register_options(self, request: Request) -> Response:
-        if not await _maybe_await(self.hooks.registration_allowed(request)):
-            raise HTTPException(
-                status_code=403, detail="passkey registration is not allowed"
-            )
         session_user = await _maybe_await(self.hooks.get_session_user(request))
         flow_id = self._new_flow_id()
         if session_user is not None:
@@ -493,9 +482,7 @@ class PasskeyAuthRouter:
                     user = await _maybe_await(
                         self.hooks.prepare_registration(request, username)
                     )
-                    context = RegistrationContext(
-                        kind="self_registration", user=user
-                    )
+                    context = RegistrationContext(kind="self_registration", user=user)
         response = JSONResponse(
             self.service.begin_registration(flow_id=flow_id, context=context)
         )
@@ -504,10 +491,6 @@ class PasskeyAuthRouter:
 
     async def register_verify(self, request: Request) -> Response:
         flow_id = self._challenge_cookie(request, self.cookies.registration_challenge)
-        if not await _maybe_await(self.hooks.registration_allowed(request)):
-            raise HTTPException(
-                status_code=403, detail="passkey registration is not allowed"
-            )
         try:
             result = self.service.verify_registration(
                 flow_id=flow_id, credential=await _json_body(request)

@@ -17,7 +17,12 @@ from my_auth import (
     RegistrationContext,
     VerifiedRegistration,
 )
-from my_auth.fastapi import PasskeyAuthRouter, PasskeyCookies, PasskeyRouteHooks
+from my_auth.fastapi import (
+    PasskeyAuthRouter,
+    PasskeyCookies,
+    PasskeyRouteHooks,
+    RenderRegister,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -27,9 +32,7 @@ def test_package_stays_on_bom_allowed_04x_line() -> None:
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     version = project["project"]["version"]
-    package = next(
-        item for item in lock["package"] if item["name"] == "my-auth"
-    )
+    package = next(item for item in lock["package"] if item["name"] == "my-auth")
 
     app_factory_tag = project["tool"]["uv"]["sources"]["app-factory"]["tag"]
 
@@ -38,16 +41,30 @@ def test_package_stays_on_bom_allowed_04x_line() -> None:
     assert package["version"] == version
     assert f"@v{version}" in readme
     assert f"git+https://github.com/mikolaj92/my-auth.git@v{version}" in readme
-    assert 'uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"\n' not in readme
+    assert (
+        'uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"\n'
+        not in readme
+    )
     assert "do not mix 0.5.x" in readme
     assert "my-auth>=0.4,<0.5" in readme
     assert f"app-factory tag `{app_factory_tag}`" in readme
     assert f"blob/{app_factory_tag}/COMPAT.md" in readme
 
 
-def _app(
-    *, allowed: bool = True, completed: bool = True
-) -> tuple[TestClient, PasskeyService]:
+def test_router_contract_has_no_registration_policy_or_bootstrap_renderer_flag() -> (
+    None
+):
+    import inspect
+    from dataclasses import fields
+
+    assert "registration_allowed" not in {
+        field.name for field in fields(PasskeyRouteHooks)
+    }
+    parameters = inspect.signature(RenderRegister.__call__).parameters
+    assert "bootstrap" not in parameters
+
+
+def _app(*, completed: bool = True) -> tuple[TestClient, PasskeyService]:
     service = PasskeyService(
         config=PasskeyConfig(
             rp_id="localhost", rp_name="Demo", origin="http://localhost"
@@ -79,14 +96,11 @@ def _app(
     async def logout(_response: Response, _request: Request):
         return None
 
-    async def policy(_request: Request):
-        return allowed
-
     async def render_login(_request: Request):
         return PlainTextResponse("login")
 
-    async def render_register(request: Request, *, bootstrap: bool):
-        del request, bootstrap
+    async def render_register(request: Request):
+        del request
         return PlainTextResponse("register")
 
     hooks = PasskeyRouteHooks(
@@ -96,7 +110,6 @@ def _app(
         get_auth_user=auth,
         login=login,
         logout=logout,
-        registration_allowed=policy,
         render_login=render_login,
         render_register=render_register,
     )
@@ -123,7 +136,9 @@ def test_anonymous_registration_is_typed_as_fresh_subject_registration() -> None
     assert response.status_code == 200
     assert isinstance(service.challenges, MemoryChallengeStore)
     flow_id = response.cookies["passkey_registration_challenge"]
-    context = service.challenges._records[(flow_id, "registration")].registration_context
+    context = service.challenges._records[
+        (flow_id, "registration")
+    ].registration_context
     assert context is not None
     assert context.kind == "self_registration"
     assert context.user.user_id == "u"
@@ -148,18 +163,6 @@ def test_registration_requires_username_field() -> None:
         ).status_code
         == 400
     )
-
-
-def test_registration_policy_denial_prevents_challenge() -> None:
-    client, service = _app(allowed=False)
-    assert (
-        client.post(
-            "/api/auth/register/options", json={"username": "name"}
-        ).status_code
-        == 403
-    )
-    assert isinstance(service.challenges, MemoryChallengeStore)
-    assert service.challenges._records == {}
 
 
 def test_capability_flow_is_bound_by_host_resolver() -> None:
@@ -201,14 +204,11 @@ def test_capability_flow_is_bound_by_host_resolver() -> None:
     async def noop(*_args):
         return None
 
-    async def allowed(_request: Request):
-        return True
-
     async def page(_request: Request):
         return PlainTextResponse("page")
 
-    async def register_page(request: Request, *, bootstrap: bool):
-        del request, bootstrap
+    async def register_page(request: Request):
+        del request
         return PlainTextResponse("register")
 
     hooks = PasskeyRouteHooks(
@@ -218,7 +218,6 @@ def test_capability_flow_is_bound_by_host_resolver() -> None:
         get_auth_user=auth,
         login=noop,
         logout=noop,
-        registration_allowed=allowed,
         render_login=page,
         render_register=register_page,
         prepare_capability_registration_context=resolve,
@@ -318,14 +317,11 @@ def test_login_verify_forwards_user_handle_without_legacy_stripping() -> None:
     async def logout(_response: Response, _request: Request):
         return None
 
-    async def policy(_request: Request):
-        return True
-
     async def render_login(_request: Request):
         return PlainTextResponse("login")
 
-    async def render_register(request: Request, *, bootstrap: bool):
-        del request, bootstrap
+    async def render_register(request: Request):
+        del request
         return PlainTextResponse("register")
 
     hooks = PasskeyRouteHooks(
@@ -335,7 +331,6 @@ def test_login_verify_forwards_user_handle_without_legacy_stripping() -> None:
         get_auth_user=auth,
         login=login,
         logout=logout,
-        registration_allowed=policy,
         render_login=render_login,
         render_register=render_register,
     )

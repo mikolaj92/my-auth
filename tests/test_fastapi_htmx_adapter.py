@@ -83,14 +83,11 @@ def _hooks() -> PasskeyRouteHooks:
     async def logout(_response: Response, _request: Request):
         return None
 
-    async def policy(_request: Request):
-        return True
-
     async def render_login(_request: Request):
         raise AssertionError("installer must replace render_login")
 
-    async def render_register(request: Request, *, bootstrap: bool):
-        del request, bootstrap
+    async def render_register(request: Request):
+        del request
         raise AssertionError("installer must replace render_register")
 
     return PasskeyRouteHooks(
@@ -100,7 +97,6 @@ def _hooks() -> PasskeyRouteHooks:
         get_auth_user=auth,
         login=login,
         logout=logout,
-        registration_allowed=policy,
         render_login=render_login,
         render_register=render_register,
     )
@@ -187,13 +183,17 @@ def test_packaged_pages_use_app_factory_shell_not_legacy_standalone_base() -> No
         html = (templates / name).read_text(encoding="utf-8")
         assert '{% extends "app_factory/shell.html" %}' in html
         assert "Legacy standalone shell" not in html
-    capability = (templates / "capability_registration.html").read_text(encoding="utf-8")
+    capability = (templates / "capability_registration.html").read_text(
+        encoding="utf-8"
+    )
     assert '{% extends "app_factory/identity_public_shell.html" %}' in capability
     assert "{% block identity_panel %}" in capability
     assert "app_factory/identity_public_state.html" in capability
-    assert 'data-platform-identity-ceremony' in capability
+    assert "data-platform-identity-ceremony" in capability
     credentials = (templates / "credential_management.html").read_text(encoding="utf-8")
-    assert '{% extends "app_factory/identity_authenticated_shell.html" %}' in credentials
+    assert (
+        '{% extends "app_factory/identity_authenticated_shell.html" %}' in credentials
+    )
     assert 'data-platform-identity-ceremony="credentials"' in credentials
 
 
@@ -311,57 +311,22 @@ def test_testclient_smoke_pages_and_package_js() -> None:
     )
 
 
-def test_host_can_hide_anonymous_registration_link() -> None:
-    app = FastAPI()
-    platform = AppFactoryUi(
-        "/static/platform", "app-factory-platform", "/static/platform"
-    )
-    install_app_factory_ui(
-        app,
-        environments=[],
-        static_path=platform.static_path,
-        mount_name=platform.mount_name,
-    )
-    install_passkey_ui(
-        app,
-        platform=platform,
-        service=_service(),
-        hooks=_hooks(),
-        config=PasskeyUiConfig(show_registration_link=lambda _request: False),
-    )
+def test_packaged_login_has_no_registration_policy_or_cta() -> None:
+    from dataclasses import fields
 
+    assert "show_registration_link" not in {
+        field.name for field in fields(PasskeyUiConfig)
+    }
+    assert "registration_link_url" not in {
+        field.name for field in fields(PasskeyUiConfig)
+    }
+
+    app, _, _ = _app()
     login = TestClient(app).get("/login")
 
     assert login.status_code == 200
     assert 'href="/register"' not in login.text
-
-
-def test_host_can_replace_anonymous_registration_link_target() -> None:
-    app = FastAPI()
-    platform = AppFactoryUi(
-        "/static/platform", "app-factory-platform", "/static/platform"
-    )
-    install_app_factory_ui(
-        app,
-        environments=[],
-        static_path=platform.static_path,
-        mount_name=platform.mount_name,
-    )
-    install_passkey_ui(
-        app,
-        platform=platform,
-        service=_service(),
-        hooks=_hooks(),
-        config=PasskeyUiConfig(
-            registration_link_url=lambda _request: "/passkey/recovery"
-        ),
-    )
-
-    login = TestClient(app).get("/login")
-
-    assert login.status_code == 200
-    assert 'href="/passkey/recovery"' in login.text
-    assert 'href="/register"' not in login.text
+    assert "Create one" not in login.text
 
 
 def test_installed_ui_renders_distinct_activation_and_recovery_pages() -> None:
@@ -380,7 +345,7 @@ def test_installed_ui_renders_distinct_activation_and_recovery_pages() -> None:
     assert 'data-registration-kind="recovery"' in recovery.text
     assert 'data-capability="recovery-token"' in recovery.text
     assert "invalid or no longer available" in invalid.text
-    assert 'data-capability=' not in invalid.text
+    assert "data-capability=" not in invalid.text
     controller = client.get(f"{ui.static_mount_path}/passkey-ui.js").text
     helper = client.get(f"{ui.static_mount_path}/passkey.js").text
     assert "registrationKind" in controller
@@ -432,11 +397,17 @@ def test_authenticated_credential_page_is_owner_scoped_and_mutable() -> None:
     user = PasskeyUser("owner", b"owner-handle", "owner")
     other = PasskeyUser("other", b"other-handle", "other")
     store = MemoryCredentialStore()
-    for subject, credential_id in ((user, b"first"), (user, b"second"), (other, b"other")):
+    for subject, credential_id in (
+        (user, b"first"),
+        (user, b"second"),
+        (other, b"other"),
+    ):
         store.save_registration(
             VerifiedRegistration(
                 subject,
-                PasskeyCredential(credential_id, subject.user_id, b"key-" + credential_id),
+                PasskeyCredential(
+                    credential_id, subject.user_id, b"key-" + credential_id
+                ),
             )
         )
     service = PasskeyService(
@@ -462,9 +433,12 @@ def test_authenticated_credential_page_is_owner_scoped_and_mutable() -> None:
     )
     assert labeled.status_code == 200
     assert "Laptop" in labeled.text
-    assert client.post(
-        "/api/auth/credentials/b3RoZXI/label", json={"label": "No"}
-    ).status_code == 404
+    assert (
+        client.post(
+            "/api/auth/credentials/b3RoZXI/label", json={"label": "No"}
+        ).status_code
+        == 404
+    )
     assert client.delete("/api/auth/credentials/c2Vjb25k").status_code == 200
     final = client.delete("/api/auth/credentials/Zmlyc3Q")
     assert final.status_code == 409
@@ -550,8 +524,6 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Zaloguj się bez hasła" in pl.text
     assert "Kontynuuj z kluczem dostępu" in pl.text
     assert "Zaloguj się telefonem (kod QR)" in pl.text
-    assert "Nie masz konta? Utwórz je" in pl.text
-    assert 'href="/register"' in pl.text
     assert "Sign in without a password" not in pl.text
     assert "app_lang=pl" in pl.headers.get("set-cookie", "")
     assert 'id="passkey-ui-messages"' in pl.text
@@ -564,7 +536,6 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Sign in without a password" in en.text
     assert "Continue with passkey" in en.text
     assert "Sign in with a phone (QR code)" in en.text
-    assert "No account? Create one" in en.text
     assert "Passkeys require a secure HTTPS connection." in en.text
     assert "Zaloguj się bez hasła" not in en.text
     assert "app_lang=en" in en.headers.get("set-cookie", "")
@@ -575,7 +546,6 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Ohne Passwort anmelden" in de.text
     assert "Mit Passkey fortfahren" in de.text
     assert "Mit einem Telefon anmelden (QR-Code)" in de.text
-    assert "Noch kein Konto? Passkey registrieren" in de.text
     assert "Passkeys erfordern eine sichere HTTPS-Verbindung." in de.text
     assert "Sign in without a password" not in de.text
     assert "app_lang=de" in de.headers.get("set-cookie", "")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TypeVar
 
 from fastapi import Request
@@ -20,8 +20,8 @@ def no_csrf_token(_request: Request) -> str | None:
 class PasskeyUiConfig:
     """Host-owned route, cookie, CSRF, and redirect configuration."""
 
-    paths: PasskeyPaths = PasskeyPaths()
-    cookies: PasskeyCookies = PasskeyCookies()
+    paths: PasskeyPaths = field(default_factory=PasskeyPaths)
+    cookies: PasskeyCookies = field(default_factory=PasskeyCookies)
     static_mount_path: str = "/auth/ui/static"
     static_url_path: str = "/auth/ui/static"
     csrf_header_name: str = "X-CSRF-Token"
@@ -30,12 +30,6 @@ class PasskeyUiConfig:
     register_success_url: str | None = None
     activation_success_url: str | None = None
     recovery_success_url: str | None = None
-    show_registration_link: Callable[[Request], MaybeAwaitable[bool]] = (
-        lambda _request: True
-    )
-    registration_link_url: Callable[[Request], MaybeAwaitable[str | None]] = (
-        lambda _request: None
-    )
     login_error_target_id: str = "passkey-login-status"
     register_error_target_id: str = "passkey-register-status"
     capability_query_param: str = "capability"

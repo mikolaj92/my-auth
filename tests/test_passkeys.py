@@ -82,3 +82,28 @@ def test_verify_registration_is_persistence_free(
     )
     assert result.user == user
     assert credentials.get_user("u") is None
+
+
+def test_registration_kinds_do_not_include_bootstrap() -> None:
+    from typing import get_args
+
+    from my_auth import RegistrationKind
+
+    assert "bootstrap" not in get_args(RegistrationKind)
+
+
+def test_legacy_user_registration_is_neutral_self_registration() -> None:
+    service = PasskeyService(
+        config=PasskeyConfig(
+            rp_id="localhost", rp_name="Demo", origin="http://localhost"
+        ),
+        challenges=(challenges := MemoryChallengeStore()),
+        credentials=MemoryCredentialStore(),
+    )
+    user = PasskeyUser("u", b"handle", "user")
+
+    service.begin_registration(flow_id="flow-neutral", user=user)
+
+    record = challenges._records[("flow-neutral", "registration")]
+    assert record.registration_context is not None
+    assert record.registration_context.kind == "self_registration"
