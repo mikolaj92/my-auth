@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 # Keep keys stable: templates and passkey-ui.js both read the same map.
 _COPY: dict[str, dict[str, str]] = {
@@ -16,16 +16,12 @@ _COPY: dict[str, dict[str, str]] = {
         ),
         "login_submit": "Continue with passkey",
         "login_hybrid": "Sign in with a phone (QR code)",
-        "login_register": "No account? Create one",
         "login_waiting": "Waiting for the WebAuthn passkey prompt.",
         "register_page_title": "Create an account",
         "register_eyebrow": "Account registration",
         "register_heading": "Create your account",
         "register_description": (
             "Choose a username and create a passkey for your new account."
-        ),
-        "register_description_bootstrap": (
-            "Create the first account and its administrator passkey."
         ),
         "register_username_label": "Username",
         "register_username_placeholder": "username",
@@ -87,16 +83,12 @@ _COPY: dict[str, dict[str, str]] = {
         ),
         "login_submit": "Kontynuuj z kluczem dostępu",
         "login_hybrid": "Zaloguj się telefonem (kod QR)",
-        "login_register": "Nie masz konta? Utwórz je",
         "login_waiting": "Oczekiwanie na monit WebAuthn klucza dostępu.",
         "register_page_title": "Utwórz konto",
         "register_eyebrow": "Rejestracja konta",
         "register_heading": "Utwórz swoje konto",
         "register_description": (
             "Wybierz nazwę użytkownika i utwórz klucz dostępu do nowego konta."
-        ),
-        "register_description_bootstrap": (
-            "Utwórz pierwsze konto oraz jego klucz administratora."
         ),
         "register_username_label": "Nazwa użytkownika",
         "register_username_placeholder": "nazwa użytkownika",
@@ -162,7 +154,6 @@ _COPY: dict[str, dict[str, str]] = {
         ),
         "login_submit": "Mit Passkey fortfahren",
         "login_hybrid": "Mit einem Telefon anmelden (QR-Code)",
-        "login_register": "Noch kein Konto? Passkey registrieren",
         "login_waiting": "Warten auf die WebAuthn-Passkey-Aufforderung.",
         "register_page_title": "Passkey registrieren",
         "register_eyebrow": "Passkey-Registrierung",
@@ -170,9 +161,6 @@ _COPY: dict[str, dict[str, str]] = {
         "register_description": (
             "Fügen Sie dem aktuellen Konto einen Passkey hinzu, "
             "ohne die Registrierungsrichtlinie des Hosts zu ändern."
-        ),
-        "register_description_bootstrap": (
-            "Erstellen Sie zunächst einen Passkey für dieses Konto."
         ),
         "register_username_label": "Benutzername",
         "register_username_placeholder": "benutzername",
@@ -214,9 +202,7 @@ _COPY: dict[str, dict[str, str]] = {
         "loading": "Laden…",
         "js_login_success": "Passkey-Anmeldung erfolgreich.",
         "js_register_success": "Passkey-Registrierung erfolgreich.",
-        "js_insecure_context": (
-            "Passkeys erfordern eine sichere HTTPS-Verbindung."
-        ),
+        "js_insecure_context": ("Passkeys erfordern eine sichere HTTPS-Verbindung."),
         "js_unsupported": (
             "Dieser Browser unterstützt keine WebAuthn-Passkeys (PublicKeyCredential)."
         ),

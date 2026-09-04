@@ -1,10 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any, Callable, Coroutine
-
-from fastapi import APIRouter, FastAPI, Request
-from starlette.staticfiles import StaticFiles
+from typing import Any
 
 from app_factory.fastapi import (
     AppFactoryUi,
@@ -12,6 +10,9 @@ from app_factory.fastapi import (
     install_app_factory_ui,
 )
 from app_factory.platform import PlatformConfig, apply_platform_context
+from fastapi import APIRouter, FastAPI, Request
+from starlette.staticfiles import StaticFiles
+
 from my_auth.fastapi import PasskeyAuthRouter, PasskeyRouteHooks
 
 from .config import PasskeyUiConfig
@@ -88,7 +89,6 @@ def install_passkey_ui(
         get_auth_user=hooks.get_auth_user,
         login=hooks.login,
         logout=hooks.logout,
-        registration_allowed=hooks.registration_allowed,
         render_login=renderer.render_login,
         render_register=renderer.render_register,
         after_register=hooks.after_register,

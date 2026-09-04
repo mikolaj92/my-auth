@@ -33,7 +33,7 @@ def test_context_requires_capability_for_invitation_and_recovery() -> None:
         with pytest.raises(ValueError, match="requires a capability"):
             RegistrationContext(kind=cast(RegistrationKind, kind), user=user)
     with pytest.raises(ValueError, match="cannot use a capability"):
-        RegistrationContext(kind="bootstrap", user=user, capability_id="cap")
+        RegistrationContext(kind="self_registration", user=user, capability_id="cap")
 
 
 def test_capability_context_rejects_cross_subject_and_wrong_purpose() -> None:
@@ -88,7 +88,9 @@ def test_service_binds_context_to_challenge_and_verified_result(monkeypatch) -> 
         credential_device_type = None
         credential_backed_up = None
 
-    monkeypatch.setattr("my_auth.passkeys.verify_registration_response", lambda **_: Verified())
+    monkeypatch.setattr(
+        "my_auth.passkeys.verify_registration_response", lambda **_: Verified()
+    )
     result = service.verify_registration(
         flow_id="flow", credential={"id": "Y3JlZGVudGlhbA", "response": {}}
     )
@@ -177,15 +179,12 @@ def _router_app(
     async def noop(*_args):
         return None
 
-    async def allowed(_request: Request):
-        return True
-
     async def render(_request: Request):
         return PlainTextResponse("login")
 
-    async def render_register(request: Request, *, bootstrap: bool):
+    async def render_register(request: Request):
         del request
-        return PlainTextResponse(str(bootstrap))
+        return PlainTextResponse("register")
 
     hooks = PasskeyRouteHooks(
         get_session_user=session,
@@ -194,7 +193,6 @@ def _router_app(
         get_auth_user=auth,
         login=noop,
         logout=noop,
-        registration_allowed=allowed,
         render_login=render,
         render_register=render_register,
         prepare_registration_context=prepare_context,
