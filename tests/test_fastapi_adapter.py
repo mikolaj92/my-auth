@@ -27,7 +27,7 @@ from my_auth.fastapi import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_package_stays_on_bom_allowed_04x_line() -> None:
+def test_package_reports_neutral_05x_line() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     lock = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
@@ -36,8 +36,7 @@ def test_package_stays_on_bom_allowed_04x_line() -> None:
 
     app_factory_tag = project["tool"]["uv"]["sources"]["app-factory"]["tag"]
 
-    assert version.startswith("0.4.")
-    assert not version.startswith("0.5.")
+    assert version.startswith("0.5.")
     assert package["version"] == version
     assert f"@v{version}" in readme
     assert f"git+https://github.com/mikolaj92/my-auth.git@v{version}" in readme
@@ -45,8 +44,8 @@ def test_package_stays_on_bom_allowed_04x_line() -> None:
         'uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git"\n'
         not in readme
     )
-    assert "do not mix 0.5.x" in readme
-    assert "my-auth>=0.4,<0.5" in readme
+    assert "my-auth>=0.5,<0.6" in readme
+    assert "invalid historical" not in readme
     assert f"app-factory tag `{app_factory_tag}`" in readme
     assert f"blob/{app_factory_tag}/COMPAT.md" in readme
 
