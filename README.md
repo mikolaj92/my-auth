@@ -14,9 +14,9 @@ user models, or audit policy.
 ## Install and imports
 
 ```sh
-uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git@v0.5.2"
-uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git@v0.5.2"
-uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.5.2"
+uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git@v0.5.3"
+uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git@v0.5.3"
+uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.5.3"
 ```
 
 Pin the immutable 0.5.x tag selected by the platform BOM. Hosts should use
