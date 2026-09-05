@@ -77,7 +77,14 @@ class PasskeyTemplateRenderer:
             success_url = self.config.recovery_success_url
         else:
             success_url = self.config.register_success_url
+        platform_context = {
+            "platform_user": None,
+            "platform_identity_menu": (),
+            "platform_show_register": False,
+            **getattr(request.state, "app_factory_platform_context", {}),
+        }
         return self.environment.get_template(template_name).render(
+            **platform_context,
             request=request,
             paths=self.config.paths,
             passkey_js_url=f"{static_base}/passkey-ui.js",

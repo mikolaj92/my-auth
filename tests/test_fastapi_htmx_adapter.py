@@ -451,6 +451,27 @@ def test_credential_page_requires_authentication() -> None:
     assert client.get("/account/passkeys").status_code == 401
 
 
+def test_renderer_merges_request_local_platform_context() -> None:
+    app, _, _ = _app()
+
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    async def platform_context(request: Request, call_next):
+        request.state.app_factory_platform_context = {
+            "platform_user": object(),
+            "platform_show_register": True,
+        }
+        return await call_next(request)
+
+    app.add_middleware(BaseHTTPMiddleware, dispatch=platform_context)
+    client = TestClient(app)
+    login = client.get("/login")
+
+    assert login.status_code == 200
+    assert "platform_user" not in login.text
+    assert 'href="/register"' in login.text
+
+
 def test_installed_ui_renders_packaged_account_registration_panel() -> None:
     _, _, ui = _app()
     request = Request(

@@ -28,6 +28,11 @@
         {{ t.login_hybrid }}
       </button>
     </form>
+    {% if platform_show_register %}
+    <a class="btn passkey-secondary-action" data-variant="ghost" href="{{ paths.register_page }}">
+      {{ t.register_page_title }}
+    </a>
+    {% endif %}
     {% set target_id = login_error_target_id %}
     {% set status_message = t.login_waiting %}
     {% include "_passkey_status.html" %}
