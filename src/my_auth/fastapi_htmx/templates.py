@@ -83,8 +83,7 @@ class PasskeyTemplateRenderer:
             "platform_show_register": False,
             **getattr(request.state, "app_factory_platform_context", {}),
         }
-        return self.environment.get_template(template_name).render(
-            **platform_context,
+        platform_context.update(
             request=request,
             paths=self.config.paths,
             passkey_js_url=f"{static_base}/passkey-ui.js",
@@ -106,6 +105,7 @@ class PasskeyTemplateRenderer:
             t=copy,
             t_json=json.dumps(copy, ensure_ascii=False, separators=(",", ":")),
         )
+        return self.environment.get_template(template_name).render(**platform_context)
 
     async def _render(
         self,
