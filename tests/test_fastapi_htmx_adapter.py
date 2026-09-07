@@ -153,6 +153,46 @@ def test_public_api_has_only_installer_contract() -> None:
     assert dataclasses.is_dataclass(PasskeyUi) and getattr(params, "frozen", False)
 
 
+def _readme_python_blocks(readme: str) -> list[str]:
+    blocks: list[str] = []
+    rest = readme
+    fence = "```python"
+    while True:
+        start = rest.find(fence)
+        if start < 0:
+            break
+        rest = rest[start + len(fence) :]
+        end = rest.find("```")
+        if end < 0:
+            break
+        blocks.append(rest[:end])
+        rest = rest[end + 3 :]
+    return blocks
+
+
+def test_readme_htmx_host_recipe_uses_identity_adapters() -> None:
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    blocks = _readme_python_blocks(readme)
+    host_recipes = [
+        block
+        for block in blocks
+        if "install_identity_adapters" in block or "install_passkey_ui" in block
+    ]
+    assert len(host_recipes) == 1
+    recipe = host_recipes[0]
+    assert "from app_factory.adapters import" in recipe
+    assert "PasskeyBinding" in recipe
+    assert "install_identity_adapters" in recipe
+    assert "install_passkey_ui" not in recipe
+    assert "install_app_factory_ui" not in recipe
+    assert "PasskeyUiConfig" not in recipe
+    for block in blocks:
+        assert "install_passkey_ui" not in block
+    assert "do **not** call\n`install_passkey_ui`" in readme
+    assert "Internal adapter API / library tests only" in readme
+    assert readme.count("install_passkey_ui") == 2
+
+
 def test_packaged_css_centers_passkey_panel_in_app_factory_shell() -> None:
     css = (
         files("my_auth.fastapi_htmx")
