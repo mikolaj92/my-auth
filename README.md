@@ -189,28 +189,38 @@ app.include_router(
 routes are `GET /login`, `GET /register`, `POST /logout`, and JSON
 `POST /api/auth/{login,register}/{options,verify}`.
 
-The `fastapi-htmx` adapter installs the same app-factory shell used by the host,
-wraps the existing passkey router, and owns its package static mount. It does
-not change WebAuthn verification, registration ordering, or transaction semantics:
+The `fastapi-htmx` extra is composed by the host through app-factory, not by
+calling this package's installer. Hosts use `PasskeyBinding` plus
+`install_identity_adapters` from `app_factory.adapters`. That composer installs
+the shared platform chrome, wraps the passkey router, and mounts package static
+files. It does not change WebAuthn verification, registration ordering, or
+transaction semantics:
 
 ```python
-from app_factory.fastapi import install_app_factory_ui
-from my_auth.fastapi_htmx import PasskeyUiConfig, install_passkey_ui
+from app_factory.adapters import PasskeyBinding, install_identity_adapters
+from app_factory.platform import PlatformConfig
 
-platform = install_app_factory_ui(app, environments=[])
-install_passkey_ui(
+install_identity_adapters(
     app,
-    platform=platform,
-    service=passkeys,
-    hooks=hooks,
-    config=PasskeyUiConfig(),
+    environments=[templates.env],
+    config=PlatformConfig(),
+    passkey=PasskeyBinding(service=passkeys, hooks=hooks),
 )
 ```
 
-The host installs the shared platform first and passes its typed `AppFactoryUi`
-value to the adapter. The installer is idempotent for the same platform and
-configuration, and rejects conflicting setup; hosts do not manually include
-the router or mount package static files.
+Hosts supply persistence, session transport (`login` / `logout` /
+`get_session_user`), and enrollment policy. They do **not** call
+`install_passkey_ui` or `install_app_factory_ui`, do not construct
+`PasskeyUiConfig`, and do not copy installer or render glue. Dummy
+`render_login` / `render_register` callables are not a host concern; packaged
+templates own those slots.
+
+The composer is idempotent for the same chrome and adapter selection, and
+rejects conflicting setup. Hosts do not manually include the router or mount
+package static files.
+
+Internal adapter API / library tests only: `install_passkey_ui` remains a
+package function used by the app-factory adapter. It is not a host recipe.
 
 Authenticated credential management is available at `GET /account/passkeys`.
 The shared page lists only credentials owned by `get_session_user`, links to the
