@@ -17,6 +17,18 @@ from my_auth import (
 )
 
 
+def test_passkeys_module_reexports_public_symbols() -> None:
+    from my_auth import passkeys
+    from my_auth.passkeys import SQLiteChallengeStore, SQLiteCredentialStore
+
+    assert passkeys.PasskeyService is PasskeyService
+    assert passkeys.MemoryChallengeStore is MemoryChallengeStore
+    assert passkeys.MemoryCredentialStore is MemoryCredentialStore
+    assert passkeys.ChallengeNotFound is ChallengeNotFound
+    assert passkeys.SQLiteChallengeStore is SQLiteChallengeStore
+    assert passkeys.SQLiteCredentialStore is SQLiteCredentialStore
+
+
 def test_memory_challenge_single_use_and_expiry() -> None:
     store = MemoryChallengeStore()
     store.save(
