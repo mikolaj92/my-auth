@@ -612,12 +612,16 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "app_lang=de" in de.headers.get("set-cookie", "")
 
     # Cookie alone resolves locale when ?lang= is absent.
-    cookied = client.get("/login", cookies={"app_lang": "en"})
+    client.cookies.clear()
+    client.cookies.set("app_lang", "en")
+    cookied = client.get("/login")
     assert cookied.status_code == 200
     assert 'lang="en"' in cookied.text
     assert "Sign in without a password" in cookied.text
 
-    cookied_de = client.get("/login", cookies={"app_lang": "de"})
+    client.cookies.clear()
+    client.cookies.set("app_lang", "de")
+    cookied_de = client.get("/login")
     assert cookied_de.status_code == 200
     assert 'lang="de"' in cookied_de.text
     assert "Ohne Passwort anmelden" in cookied_de.text

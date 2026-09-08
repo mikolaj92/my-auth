@@ -350,10 +350,10 @@ def test_login_verify_forwards_user_handle_without_legacy_stripping() -> None:
         },
     }
 
+    client.cookies.set("passkey_authentication_challenge", "flow-1")
     response = client.post(
         "/api/auth/login/verify",
         json=payload,
-        cookies={"passkey_authentication_challenge": "flow-1"},
     )
 
     assert response.status_code == 200
