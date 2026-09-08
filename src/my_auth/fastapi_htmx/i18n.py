@@ -53,6 +53,10 @@ _COPY: dict[str, dict[str, str]] = {
         "credentials_save": "Save label",
         "credentials_remove": "Remove",
         "credentials_empty": "No passkeys are registered.",
+        "credentials_device_bound": "Device-bound",
+        "credentials_backup_eligible": "Backup eligible; not backed up",
+        "credentials_backed_up": "Backed up",
+        "credentials_backup_unknown": "Backup status unknown",
         "confirm_credential_removal": "Remove this passkey?",
         "noscript": (
             "WebAuthn passkeys require JavaScript and a browser with "
@@ -74,6 +78,10 @@ _COPY: dict[str, dict[str, str]] = {
         "js_username_spaces": "Username must not contain spaces.",
     },
     "pl": {
+        "credentials_device_bound": "Przypisany do urządzenia",
+        "credentials_backup_eligible": "Możliwa kopia zapasowa; jeszcze niewykonana",
+        "credentials_backed_up": "Kopia zapasowa wykonana",
+        "credentials_backup_unknown": "Nieznany stan kopii zapasowej",
         "login_page_title": "Zaloguj się kluczem dostępu",
         "login_eyebrow": "Logowanie kluczem",
         "login_heading": "Zaloguj się bez hasła",
@@ -194,6 +202,10 @@ _COPY: dict[str, dict[str, str]] = {
         "credentials_save": "Bezeichnung speichern",
         "credentials_remove": "Entfernen",
         "credentials_empty": "Keine Passkeys registriert.",
+        "credentials_device_bound": "Gerätegebunden",
+        "credentials_backup_eligible": "Sicherung möglich; noch nicht gesichert",
+        "credentials_backed_up": "Gesichert",
+        "credentials_backup_unknown": "Sicherungsstatus unbekannt",
         "confirm_credential_removal": "Diesen Passkey entfernen?",
         "noscript": (
             "WebAuthn-Passkeys erfordern JavaScript und einen Browser "
