@@ -14,6 +14,8 @@ The tested cross-library pins live only in the
 - Remove tracked automation leftovers (#97).
 - Split passkey implementation into focused modules while retaining the facade (#98).
 - Add private security reporting guidance and this source history (#104).
+- Render passkey backup status badges without device-specific guarantees (#109).
+- Expose `assert_external_transaction_contract` in `my_auth.testing` for external-mode stores (#111).
 
 ## 0.5.4
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
+
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
+
 from .passkeys import (
     ChallengeNotFound,
     ChallengeStore,
@@ -60,6 +63,40 @@ def assert_credential_store_contract(store_factory: CredentialStoreFactory) -> N
     assert store.get_credential(laptop.credential_id) is None
 
 
+def assert_external_transaction_contract(
+    store_factory: Callable[[sqlite3.Connection], CredentialStore],
+    schema_initializer: Callable[[sqlite3.Connection], None],
+) -> None:
+    """Verify that an external-mode store leaves persistence to the outer transaction."""
+    connection = sqlite3.connect(":memory:")
+    try:
+        schema_initializer(connection)
+        user = PasskeyUser("u1", b"h1", "Alice")
+        reg = VerifiedRegistration(
+            user=user,
+            credential=PasskeyCredential(
+                b"c1", user.user_id, b"pubkey", created_at=datetime.now(UTC)
+            ),
+        )
+        connection.execute("BEGIN IMMEDIATE")
+        store = store_factory(connection)
+        store.save_registration(reg)
+        connection.rollback()
+
+        connection.execute("BEGIN IMMEDIATE")
+        store = store_factory(connection)
+        assert store.get_credential(b"c1") is None
+        store.save_registration(reg)
+        connection.commit()
+
+        connection.execute("BEGIN IMMEDIATE")
+        store = store_factory(connection)
+        assert store.get_credential(b"c1") is not None
+        connection.rollback()
+    finally:
+        connection.close()
+
+
 def assert_challenge_store_contract(store_factory: ChallengeStoreFactory) -> None:
     store = store_factory(lambda: datetime.now(UTC))
     _ = store.save(
@@ -78,8 +115,6 @@ def assert_challenge_store_contract(store_factory: ChallengeStoreFactory) -> Non
     try:
         _ = store.pop(key="expired-flow", kind="authentication")
     except ChallengeNotFound:
-        return
-    raise AssertionError("store returned expired challenge")
-
-
-__all__ = ["assert_challenge_store_contract", "assert_credential_store_contract"]
+        pass
+    else:
+        raise AssertionError("expired challenge must be inaccessible")
