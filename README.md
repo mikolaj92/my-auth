@@ -1,5 +1,7 @@
 # my-auth
 
+[Security policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+
 `my-auth` is a passkey-only authentication core for FastAPI/Starlette
 applications. Version 0.5 uses verification-first, neutral multi-user registration
 and explicit, versioned SQLite schema ownership. Enrollment exposure and grants
