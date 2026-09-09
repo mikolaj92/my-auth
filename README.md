@@ -1,10 +1,11 @@
 # my-auth
 
-[Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [OIDC provider direction](docs/oidc-provider.md)
+[Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [OIDC provider profile](docs/oidc-provider.md)
 
-**Approved next direction:** my-auth will implement the OpenID Provider/server
-role itself, using its passkey login. No external IdP is required. Current
-releases do not yet implement OIDC; see the linked delivery and conformance gates.
+**Current optional direction:** my-auth implements the first OpenID
+Provider/server profile itself, using its passkey login. No external IdP is
+required. It is available through the `my-auth[oidc]` extra; see the linked
+support matrix and conformance gates.
 
 `my-auth` is a passkey-only authentication core for FastAPI/Starlette
 applications. Version 0.5 uses verification-first, neutral multi-user registration
@@ -20,9 +21,9 @@ user models, or audit policy.
 ## Install and imports
 
 ```sh
-uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git@v0.5.4"
-uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git@v0.5.4"
-uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.5.4"
+uv add "my-auth @ git+https://github.com/mikolaj92/my-auth.git@v0.5.5"
+uv add "my-auth[fastapi] @ git+https://github.com/mikolaj92/my-auth.git@v0.5.5"
+uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.5.5"
 ```
 
 Pin the immutable 0.5.x tag selected by the platform BOM. Hosts should use

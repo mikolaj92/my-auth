@@ -5,6 +5,15 @@ Entries describe source changes. A Git tag is not necessarily a published
 The tested cross-library pins live only in the
 [app-factory compatibility matrix](https://github.com/mikolaj92/app-factory/blob/main/COMPAT.md).
 
+## 0.5.5
+
+- Add the optional Authlib/FastAPI OIDC Provider authorization-code profile with
+  S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo, and explicit host
+  session/consent seams (#112). This is not an OpenID Foundation certification
+  claim; consult `docs/oidc-provider.md` for unsupported features and gates.
+
+Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
+
 ## Unreleased
 
 - Require FastAPI >=0.141.1 in optional adapters and HTTPX2 >=2.12.0 for tests;
@@ -16,11 +25,6 @@ The tested cross-library pins live only in the
 - Add private security reporting guidance and this source history (#104).
 - Render passkey backup status badges without device-specific guarantees (#109).
 - Expose `assert_external_transaction_contract` in `my_auth.testing` for external-mode stores (#111).
-- Add the optional Authlib/FastAPI OIDC Provider authorization-code profile with
-  S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo, and explicit host
-  session/consent seams (#112). This is not an OpenID Foundation certification
-  claim; consult `docs/oidc-provider.md` for unsupported features and gates.
-
 ## 0.5.4
 
 - Merge request-local platform context before rendering, avoiding duplicate
