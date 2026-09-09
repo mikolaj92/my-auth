@@ -10,8 +10,11 @@ capability tokens, or unredacted production data in a public issue.
 ## Scope
 
 my-auth owns WebAuthn options and verification, RP/origin configuration,
-single-use challenges, credential ownership and counters, and enrollment
-capabilities. Application sessions, CSRF policy, administrator permissions,
+single-use challenges, credential ownership and counters, enrollment
+capabilities, and the optional pre-ceremony rate-limit hook. The host owns
+rate-limit keys, trusted proxy policy, quotas, failure mode, and shared
+multi-worker storage. Application sessions, CSRF policy, administrator
+permissions,
 provisioning, recovery authorization, and audit policy belong to the host.
 The existing HTTP/UI adapters are not an OAuth/OIDC provider. The approved
 [OIDC provider direction](docs/oidc-provider.md) adds optional server-side

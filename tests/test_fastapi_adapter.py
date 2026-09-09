@@ -23,6 +23,9 @@ from my_auth.fastapi import (
     PasskeyCookies,
     PasskeyFastAPISettings,
     PasskeyRouteHooks,
+    RateLimitDecision,
+    RateLimiter,
+    RateLimitOperation,
     RenderRegister,
 )
 
@@ -94,6 +97,44 @@ def test_fastapi_settings_accept_canonical_origin_allowlist_and_legacy_alias() -
         )
 
 
+def test_router_rate_limit_hook_rejects_before_options_and_verify() -> None:
+    calls: list[tuple[str, RateLimitOperation]] = []
+
+    def deny(request: Request, operation: RateLimitOperation) -> RateLimitDecision:
+        calls.append((request.url.path, operation))
+        return RateLimitDecision.deny(retry_after_seconds=30)
+
+    client, service = _app(rate_limit=deny)
+    options = client.post("/api/auth/login/options")
+    assert options.status_code == 429
+    assert options.headers["retry-after"] == "30"
+    assert options.json() == {"detail": "too many authentication attempts"}
+    assert isinstance(service.challenges, MemoryChallengeStore)
+    assert service.challenges._records == {}
+
+    verify = client.post("/api/auth/login/verify", json={})
+    assert verify.status_code == 429
+    assert verify.headers["retry-after"] == "30"
+    assert calls == [
+        ("/api/auth/login/options", "login_options"),
+        ("/api/auth/login/verify", "login_verify"),
+    ]
+
+
+def test_rate_limiter_failure_fails_closed_without_challenge_mutation() -> None:
+    def failing(request: Request, operation: RateLimitOperation) -> RateLimitDecision:
+        del request, operation
+        raise RuntimeError("limiter backend unavailable")
+
+    client, service = _app(rate_limit=failing, raise_server_exceptions=False)
+    response = client.post("/api/auth/login/options")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "authentication temporarily unavailable"}
+    assert isinstance(service.challenges, MemoryChallengeStore)
+    assert service.challenges._records == {}
+
+
 def test_router_contract_has_no_registration_policy_or_bootstrap_renderer_flag() -> (
     None
 ):
@@ -107,7 +148,12 @@ def test_router_contract_has_no_registration_policy_or_bootstrap_renderer_flag()
     assert "bootstrap" not in parameters
 
 
-def _app(*, completed: bool = True) -> tuple[TestClient, PasskeyService]:
+def _app(
+    *,
+    completed: bool = True,
+    rate_limit: RateLimiter | None = None,
+    raise_server_exceptions: bool = True,
+) -> tuple[TestClient, PasskeyService]:
     service = PasskeyService(
         config=PasskeyConfig(
             rp_id="localhost", rp_name="Demo", origin="http://localhost"
@@ -155,10 +201,11 @@ def _app(*, completed: bool = True) -> tuple[TestClient, PasskeyService]:
         logout=logout,
         render_login=render_login,
         render_register=render_register,
+        rate_limit=rate_limit,
     )
     app = FastAPI()
     app.include_router(PasskeyAuthRouter(service=service, hooks=hooks).router)
-    return TestClient(app), service
+    return TestClient(app, raise_server_exceptions=raise_server_exceptions), service
 
 
 def test_options_use_distinct_flow_cookies() -> None:

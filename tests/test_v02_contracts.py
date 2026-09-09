@@ -167,6 +167,7 @@ def test_config_accepts_multiple_exact_origins_and_rejects_conflicts() -> None:
         ("https://example.com", "http://login.example.com"),
         ("https://example.com", "https://example.com:bad"),
         ("https://example.com", "https://example.com:443"),
+        ("https://example.com", "https://example.com\\path"),
     ):
         with pytest.raises(ValueError):
             PasskeyConfig(

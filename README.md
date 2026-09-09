@@ -235,6 +235,18 @@ separate challenge cookies: `passkey_authentication_challenge` and
 sessions. CSRF middleware is intentionally absent; the host applies its CSRF
 policy.
 
+The optional `PasskeyRouteHooks.rate_limit(request, operation)` hook runs before
+options creation or verification. It returns `RateLimitDecision.allow()` or
+`RateLimitDecision.deny(retry_after_seconds=...)`; denial returns a neutral 429
+with `Retry-After` when supplied and creates/consumes no challenge. The four
+operation names are `login_options`, `login_verify`, `register_options`, and
+`register_verify`. The host owns the key (for example, a trusted
+proxy-derived network key plus operation and a documented user scope), proxy
+trust, limits, and shared storage. The hook must not trust arbitrary
+`X-Forwarded-For`, use only a random flow id, or turn a transient limiter
+failure into an allow. Path-local memory is not a multi-worker guarantee;
+production deployments need a deliberately shared limiter where required.
+
 ```python
 from my_auth.fastapi import (
     PasskeyFastAPIHooks,

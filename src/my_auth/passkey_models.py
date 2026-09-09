@@ -31,7 +31,7 @@ def _normalize_origin(origin: str) -> str:
         raise ValueError("origin must be a non-empty string")
     if origin != origin.strip():
         raise ValueError("origin must not have surrounding whitespace")
-    if any(ord(character) < 0x20 for character in origin) or "\\\\" in origin:
+    if any(ord(character) < 0x20 for character in origin) or "\\" in origin:
         raise ValueError("origin contains invalid control characters")
     parsed = urlsplit(origin)
     scheme = parsed.scheme.lower()

@@ -27,6 +27,10 @@ Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
   single-origin constructor and environment aliases. Registration and
   authentication validate against the same exact allowlist; Related Origin
   Requests remain host-owned (#107).
+- Add an optional pre-ceremony `PasskeyRouteHooks.rate_limit` seam with neutral
+  429 responses, optional `Retry-After`, and no challenge mutation on denial.
+  Limiter failures fail closed with a neutral 503. Hosts retain ownership of
+  keys, proxy trust, storage, and fail-closed policy (#108).
 - Require FastAPI >=0.141.1 in optional adapters and HTTPX2 >=2.12.0 for tests;
   verify the actual TestClient transport and error responses (#103).
 - Align the nested app-factory source with the tested chrome generation (#95).

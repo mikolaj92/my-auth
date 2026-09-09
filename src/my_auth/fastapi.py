@@ -56,6 +56,44 @@ class RenderCapabilityRegistration(Protocol):
     ) -> MaybeAwaitable[Response]: ...
 
 
+RateLimitOperation = Literal[
+    "login_options",
+    "login_verify",
+    "register_options",
+    "register_verify",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class RateLimitDecision:
+    """Host-owned decision returned before a WebAuthn operation starts."""
+
+    allowed: bool
+    retry_after_seconds: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.retry_after_seconds is not None and (
+            isinstance(self.retry_after_seconds, bool)
+            or not isinstance(self.retry_after_seconds, int)
+            or self.retry_after_seconds < 0
+        ):
+            raise ValueError("retry_after_seconds must be a non-negative integer")
+
+    @classmethod
+    def allow(cls) -> RateLimitDecision:
+        return cls(allowed=True)
+
+    @classmethod
+    def deny(cls, *, retry_after_seconds: int | None = None) -> RateLimitDecision:
+        return cls(allowed=False, retry_after_seconds=retry_after_seconds)
+
+
+class RateLimiter(Protocol):
+    def __call__(
+        self, request: Request, operation: RateLimitOperation
+    ) -> MaybeAwaitable[RateLimitDecision]: ...
+
+
 class _PasskeyServiceAPI(Protocol):
     config: PasskeyConfig
 
@@ -160,6 +198,7 @@ class PasskeyRouteHooks:
     allow_final_credential_removal: (
         Callable[[Request, PasskeyUser], MaybeAwaitable[bool]] | None
     ) = None
+    rate_limit: RateLimiter | None = None
 
 
 PasskeyFastAPIHooks = PasskeyRouteHooks
@@ -465,13 +504,15 @@ class PasskeyAuthRouter:
         capability = request.query_params.get("capability")
         return await _maybe_await(renderer(request, kind=kind, capability=capability))
 
-    async def login_options(self) -> Response:
+    async def login_options(self, request: Request) -> Response:
+        await self._check_rate_limit(request, "login_options")
         flow_id = self._new_flow_id()
         response = JSONResponse(self.service.begin_authentication(flow_id=flow_id))
         self._set_cookie(response, self.cookies.authentication_challenge, flow_id)
         return response
 
     async def login_verify(self, request: Request) -> Response:
+        await self._check_rate_limit(request, "login_verify")
         flow_id = self._challenge_cookie(request, self.cookies.authentication_challenge)
         # Modern WebAuthn path: forward response.userHandle unchanged.
         # Missing handles are allowed; mismatches still fail closed in the service.
@@ -497,6 +538,7 @@ class PasskeyAuthRouter:
         return response
 
     async def register_options(self, request: Request) -> Response:
+        await self._check_rate_limit(request, "register_options")
         session_user = await _maybe_await(self.hooks.get_session_user(request))
         flow_id = self._new_flow_id()
         if session_user is not None:
@@ -549,6 +591,7 @@ class PasskeyAuthRouter:
         return response
 
     async def register_verify(self, request: Request) -> Response:
+        await self._check_rate_limit(request, "register_verify")
         flow_id = self._challenge_cookie(request, self.cookies.registration_challenge)
         try:
             result = self.service.verify_registration(
@@ -584,6 +627,32 @@ class PasskeyAuthRouter:
         self._delete_cookie(response, self.cookies.authentication_challenge)
         self._delete_cookie(response, self.cookies.registration_challenge)
         return response
+
+    async def _check_rate_limit(
+        self, request: Request, operation: RateLimitOperation
+    ) -> None:
+        limiter = self.hooks.rate_limit
+        if limiter is None:
+            return
+        try:
+            decision = await _maybe_await(limiter(request, operation))
+        except Exception as error:
+            logger.exception("passkey rate limiter failed")
+            raise HTTPException(
+                status_code=503,
+                detail="authentication temporarily unavailable",
+            ) from error
+        if not decision.allowed:
+            headers = (
+                {"Retry-After": str(decision.retry_after_seconds)}
+                if decision.retry_after_seconds is not None
+                else None
+            )
+            raise HTTPException(
+                status_code=429,
+                detail="too many authentication attempts",
+                headers=headers,
+            )
 
     def _new_flow_id(self) -> str:
         return secrets.token_urlsafe(32)
@@ -731,5 +800,8 @@ __all__ = [
     "PasskeyFastAPISettings",
     "PasskeyPaths",
     "PasskeyRouteHooks",
+    "RateLimitDecision",
+    "RateLimitOperation",
+    "RateLimiter",
     "build_passkey_fastapi_plugin",
 ]
