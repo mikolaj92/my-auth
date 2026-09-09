@@ -15,6 +15,7 @@ _COPY: dict[str, dict[str, str]] = {
             "This page keeps WebAuthn API responses as JSON."
         ),
         "login_submit": "Continue with passkey",
+        "login_username_label": "Username (optional)",
         "login_hybrid": "Sign in with a phone (QR code)",
         "login_waiting": "Waiting for the WebAuthn passkey prompt.",
         "register_page_title": "Create an account",
@@ -90,6 +91,7 @@ _COPY: dict[str, dict[str, str]] = {
             "Ta strona zwraca odpowiedzi API WebAuthn jako JSON."
         ),
         "login_submit": "Kontynuuj z kluczem dostępu",
+        "login_username_label": "Nazwa użytkownika (opcjonalnie)",
         "login_hybrid": "Zaloguj się telefonem (kod QR)",
         "login_waiting": "Oczekiwanie na monit WebAuthn klucza dostępu.",
         "register_page_title": "Utwórz konto",
@@ -161,6 +163,7 @@ _COPY: dict[str, dict[str, str]] = {
             "Diese Seite liefert WebAuthn-API-Antworten als JSON."
         ),
         "login_submit": "Mit Passkey fortfahren",
+        "login_username_label": "Benutzername (optional)",
         "login_hybrid": "Mit einem Telefon anmelden (QR-Code)",
         "login_waiting": "Warten auf die WebAuthn-Passkey-Aufforderung.",
         "register_page_title": "Passkey registrieren",

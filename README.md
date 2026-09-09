@@ -340,5 +340,8 @@ other sensitive registration data are never rendered.
 Use HTTPS in production; `http://localhost` is allowed for local development.
 Keep `rp_id` and `origin` server-configured, use Secure/HttpOnly/SameSite flow
 cookies, rotate or clear the host session on login, and protect state-changing
-routes with host CSRF controls. WebAuthn browsers without support need a
+routes with host CSRF controls. The optional login Conditional UI uses a visible
+`autocomplete="username webauthn"` field and only starts after
+`PublicKeyCredential.isConditionalMediationAvailable()` reports support; the
+manual and hybrid buttons remain the fallback. Browsers without WebAuthn need a
 host-provided recovery or fallback path.

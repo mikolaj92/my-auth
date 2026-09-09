@@ -112,11 +112,16 @@ export async function loginPasskey({
   optionsUrl = "/api/auth/login/options",
   verifyUrl = "/api/auth/login/verify",
   hint,
+  mediation,
+  signal,
   fetchOptions = {},
 } = {}) {
   const options = await postJSON(optionsUrl, {}, fetchOptions);
   if (hint) options.hints = [hint];
-  const credential = await navigator.credentials.get({ publicKey: parseRequestOptions(options) });
+  const requestOptions = { publicKey: parseRequestOptions(options) };
+  if (mediation) requestOptions.mediation = mediation;
+  if (signal) requestOptions.signal = signal;
+  const credential = await navigator.credentials.get(requestOptions);
   return postJSON(verifyUrl, serializeCredential(credential), fetchOptions);
 }
 

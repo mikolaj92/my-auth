@@ -17,12 +17,25 @@
       data-options-url="{{ paths.login_options }}"
       data-verify-url="{{ paths.login_verify }}"
       data-status-target="{{ login_error_target_id }}"
+      {% if conditional_ui %}data-conditional-ui="true"{% endif %}
       data-csrf-header="{{ csrf_header_name }}"
       {% if csrf_token %}data-csrf-token="{{ csrf_token }}"{% endif %}
       {% if login_success_url %}data-success-url="{{ login_success_url }}"{% endif %}
       hx-target="#{{ login_error_target_id }}"
       hx-swap="innerHTML"
     >
+      {% if conditional_ui %}
+      <div class="field passkey-conditional-field">
+        <label class="label" for="passkey-login-username">{{ t.login_username_label }}</label>
+        <input
+          id="passkey-login-username"
+          class="input"
+          name="username"
+          autocomplete="username webauthn"
+          data-passkey-conditional-input
+        >
+      </div>
+      {% endif %}
       <button class="btn passkey-primary-action" data-variant="primary" type="submit">{{ t.login_submit }}</button>
       <button class="btn passkey-secondary-action" data-variant="outline" type="button" data-passkey-hybrid>
         {{ t.login_hybrid }}

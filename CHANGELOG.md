@@ -16,6 +16,11 @@ Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
 
 ## Unreleased
 
+- Add opt-in WebAuthn Conditional UI/autofill on the login page with a visible
+  `autocomplete="username webauthn"` field. Conditional mediation is feature-
+  detected; manual and hybrid login remain available, and pending prompts are
+  cancelled on manual login, HTMX replacement, and view removal (#105).
+
 - Require FastAPI >=0.141.1 in optional adapters and HTTPX2 >=2.12.0 for tests;
   verify the actual TestClient transport and error responses (#103).
 - Align the nested app-factory source with the tested chrome generation (#95).

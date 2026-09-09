@@ -27,6 +27,7 @@ function loadMessages() {
 }
 
 const messages = loadMessages();
+const conditionalControllers = new WeakMap();
 
 function csrfHeaders(form) {
   const headerName = form.dataset.csrfHeader;
@@ -54,6 +55,24 @@ function setStatus(form, message, state) {
   target.textContent = message;
 }
 
+function isAbortError(error) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function setErrorUnlessAborted(form, error) {
+  if (isAbortError(error)) return;
+  setStatus(
+    form,
+    error instanceof Error ? error.message : messages.js_request_failed,
+    "error",
+  );
+}
+
+function abortConditionalLogin(form) {
+  conditionalControllers.get(form)?.abort();
+  conditionalControllers.delete(form);
+}
+
 function assertWebAuthnSupport(form) {
   if (!window.isSecureContext) {
     setStatus(form, messages.js_insecure_context, "error");
@@ -75,13 +94,23 @@ function handleSuccess(form, action) {
 }
 
 async function submitLogin(form, hint) {
-  await loginPasskey({
-    optionsUrl: form.dataset.optionsUrl,
-    verifyUrl: form.dataset.verifyUrl,
-    hint,
-    fetchOptions: { headers: csrfHeaders(form) },
-  });
-  handleSuccess(form, "login");
+  abortConditionalLogin(form);
+  const controller = new AbortController();
+  conditionalControllers.set(form, controller);
+  try {
+    await loginPasskey({
+      optionsUrl: form.dataset.optionsUrl,
+      verifyUrl: form.dataset.verifyUrl,
+      hint,
+      signal: controller.signal,
+      fetchOptions: { headers: csrfHeaders(form) },
+    });
+    handleSuccess(form, "login");
+  } finally {
+    if (conditionalControllers.get(form) === controller) {
+      conditionalControllers.delete(form);
+    }
+  }
 }
 
 async function submitRegister(form) {
@@ -132,8 +161,7 @@ async function submitPasskeyForm(form, hint) {
     }
     await submitLogin(form, hint);
   } catch (error) {
-    const message = error instanceof Error ? error.message : messages.js_request_failed;
-    setStatus(form, message, "error");
+    setErrorUnlessAborted(form, error);
   }
 }
 
@@ -182,8 +210,40 @@ function bindCredentialManagement(root) {
   });
 }
 
+async function startConditionalLogin(form) {
+  if (
+    form.dataset.passkeyForm !== "login" ||
+    form.dataset.conditionalUi !== "true" ||
+    !window.PublicKeyCredential?.isConditionalMediationAvailable
+  ) return;
+  if (!(await PublicKeyCredential.isConditionalMediationAvailable())) return;
+  const controller = new AbortController();
+  const previous = conditionalControllers.get(form);
+  previous?.abort();
+  conditionalControllers.set(form, controller);
+  try {
+    await loginPasskey({
+      optionsUrl: form.dataset.optionsUrl,
+      verifyUrl: form.dataset.verifyUrl,
+      mediation: "conditional",
+      signal: controller.signal,
+      fetchOptions: { headers: csrfHeaders(form) },
+    });
+    handleSuccess(form, "login");
+  } catch (error) {
+    setErrorUnlessAborted(form, error);
+  } finally {
+    if (conditionalControllers.get(form) === controller) {
+      conditionalControllers.delete(form);
+    }
+  }
+}
+
 function bindPasskeyForm(form) {
+  if (form.dataset.passkeyBound === "true") return;
+  form.dataset.passkeyBound = "true";
   assertWebAuthnSupport(form);
+  void startConditionalLogin(form);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     void submitPasskeyForm(form);
@@ -193,7 +253,28 @@ function bindPasskeyForm(form) {
   });
 }
 
-bindCredentialManagement(document);
-for (const form of document.querySelectorAll("[data-passkey-form]")) {
-  bindPasskeyForm(form);
+function bindAll(root = document) {
+  bindCredentialManagement(root);
+  if (root instanceof Element && root.matches("[data-passkey-form]")) {
+    bindPasskeyForm(root);
+  }
+  for (const form of root.querySelectorAll("[data-passkey-form]")) {
+    bindPasskeyForm(form);
+  }
 }
+
+bindAll();
+document.addEventListener("htmx:afterSwap", (event) => {
+  bindAll(event.detail?.elt || document);
+});
+const removalObserver = new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    for (const node of mutation.removedNodes) {
+      if (node instanceof Element) {
+        node.querySelectorAll("[data-passkey-form]").forEach(abortConditionalLogin);
+        if (node.matches("[data-passkey-form]")) abortConditionalLogin(node);
+      }
+    }
+  }
+});
+removalObserver.observe(document.documentElement, { childList: true, subtree: true });

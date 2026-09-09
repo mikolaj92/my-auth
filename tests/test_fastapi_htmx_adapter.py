@@ -627,7 +627,59 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Ohne Passwort anmelden" in cookied_de.text
 
 
-def test_phone_login_uses_native_webauthn_hybrid_hint() -> None:
+def test_login_conditional_ui_has_visible_autofill_field_and_can_be_disabled() -> None:
+    app, platform, _ = _app()
+    client = TestClient(app)
+    enabled_app = FastAPI()
+    enabled_platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        enabled_app,
+        environments=[],
+        static_path=enabled_platform.static_path,
+        mount_name=enabled_platform.mount_name,
+    )
+    from my_auth.fastapi_htmx import PasskeyUiConfig
+
+    install_passkey_ui(
+        enabled_app,
+        platform=enabled_platform,
+        service=_service(),
+        hooks=_hooks(),
+        config=PasskeyUiConfig(conditional_ui=True),
+    )
+    enabled = TestClient(enabled_app).get("/login")
+    assert enabled.status_code == 200
+    assert 'autocomplete="username webauthn"' in enabled.text
+    assert 'type="hidden"' not in enabled.text
+    assert 'data-conditional-ui="true"' in enabled.text
+
+    disabled_app = FastAPI()
+    disabled_platform = AppFactoryUi(
+        "/static/platform", "app-factory-platform", "/static/platform"
+    )
+    install_app_factory_ui(
+        disabled_app,
+        environments=[],
+        static_path=disabled_platform.static_path,
+        mount_name=disabled_platform.mount_name,
+    )
+    install_passkey_ui(
+        disabled_app,
+        platform=disabled_platform,
+        service=_service(),
+        hooks=_hooks(),
+        config=PasskeyUiConfig(conditional_ui=False),
+    )
+    disabled = TestClient(disabled_app).get("/login")
+    assert disabled.status_code == 200
+    assert 'autocomplete="username webauthn"' not in disabled.text
+    assert 'data-conditional-ui="true"' not in disabled.text
+    assert platform is not disabled_platform
+
+
+def test_phone_login_uses_native_webauthn_hybrid_hint_and_abort_boundary() -> None:
     app, _, ui = _app()
     client = TestClient(app)
     controller = client.get(f"{ui.static_mount_path}/passkey-ui.js").text
@@ -636,6 +688,10 @@ def test_phone_login_uses_native_webauthn_hybrid_hint() -> None:
     assert 'submitPasskeyForm(form, "hybrid")' in controller
     assert 'hint === "hybrid" ? messages.js_hybrid_prompt' in controller
     assert "if (hint) options.hints = [hint]" in helper
+    assert "isConditionalMediationAvailable" in controller
+    assert 'mediation: "conditional"' in controller or "mediation" in helper
+    assert "AbortController" in controller
+    assert "htmx:afterSwap" in controller
 
 
 def test_login_uses_full_width_content_class_not_app_content_inner() -> None:

@@ -19,10 +19,13 @@ function loginPage(messages) {
       <body>
         <form
           data-passkey-form="login"
+          data-conditional-ui="true"
           data-status-target="passkey-login-status"
           data-options-url="/unused/options"
           data-verify-url="/unused/verify"
         >
+          <label for="passkey-login-username">Nazwa użytkownika (opcjonalnie)</label>
+          <input id="passkey-login-username" name="username" autocomplete="username webauthn">
           <button type="submit">Kontynuuj z kluczem dostępu</button>
           <button type="button" data-passkey-hybrid>Zaloguj się telefonem (kod QR)</button>
         </form>
@@ -123,6 +126,15 @@ test("keeps the unsupported-browser diagnosis for a missing API on a trusted ori
 test("starts both login actions without misreporting a cancelled prompt", async ({ page }) => {
   await page.addInitScript(() => {
     window.__webauthnCalls = [];
+    const credentialApi = window.PublicKeyCredential || function PublicKeyCredential() {};
+    Object.defineProperty(credentialApi, "isConditionalMediationAvailable", {
+      configurable: true,
+      value: async () => false,
+    });
+    Object.defineProperty(window, "PublicKeyCredential", {
+      configurable: true,
+      value: credentialApi,
+    });
     Object.defineProperty(navigator, "credentials", {
       configurable: true,
       value: {
@@ -148,4 +160,160 @@ test("starts both login actions without misreporting a cancelled prompt", async 
   await expect(page.locator("#passkey-login-status")).not.toHaveText(
     /nie obsługuje kluczy WebAuthn/,
   );
+});
+
+test("starts conditional autofill only when the browser reports support", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__conditionalCalls = [];
+    const credentialApi = window.PublicKeyCredential || function PublicKeyCredential() {};
+    Object.defineProperty(credentialApi, "isConditionalMediationAvailable", {
+      configurable: true,
+      value: async () => true,
+    });
+    Object.defineProperty(window, "PublicKeyCredential", {
+      configurable: true,
+      value: credentialApi,
+    });
+    Object.defineProperty(navigator, "credentials", {
+      configurable: true,
+      value: {
+        get: async ({ mediation, signal }) => {
+          window.__conditionalCalls.push({ mediation, hasSignal: Boolean(signal) });
+          throw new DOMException("The operation was cancelled.", "AbortError");
+        },
+      },
+    });
+  });
+  await installRoutes(page);
+  await page.goto("http://localhost/login");
+
+  await expect(page.locator("#passkey-login-username")).toBeVisible();
+  await expect(page.locator("#passkey-login-username")).toHaveAttribute(
+    "autocomplete",
+    "username webauthn",
+  );
+  await expect.poll(() => page.evaluate(() => window.__conditionalCalls.length)).toBe(1);
+  expect(await page.evaluate(() => window.__conditionalCalls[0])).toEqual({
+    mediation: "conditional",
+    hasSignal: true,
+  });
+  await expect(page.locator("#passkey-login-status")).not.toHaveAttribute(
+    "data-state",
+    "error",
+  );
+});
+
+test("leaves manual login working when conditional mediation is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__conditionalCalls = [];
+    const credentialApi = window.PublicKeyCredential || function PublicKeyCredential() {};
+    Object.defineProperty(credentialApi, "isConditionalMediationAvailable", {
+      configurable: true,
+      value: async () => false,
+    });
+    Object.defineProperty(window, "PublicKeyCredential", {
+      configurable: true,
+      value: credentialApi,
+    });
+    Object.defineProperty(navigator, "credentials", {
+      configurable: true,
+      value: {
+        get: async ({ mediation }) => {
+          window.__conditionalCalls.push(mediation || "manual");
+          throw new DOMException("The operation was cancelled.", "AbortError");
+        },
+      },
+    });
+  });
+  await installRoutes(page);
+  await page.goto("http://localhost/login");
+  await page.waitForTimeout(50);
+  expect(await page.evaluate(() => window.__conditionalCalls)).toEqual([]);
+
+  await page.getByRole("button", { name: "Kontynuuj z kluczem dostępu" }).click();
+  await expect.poll(() => page.evaluate(() => window.__conditionalCalls.length)).toBe(1);
+  expect(await page.evaluate(() => window.__conditionalCalls[0])).toBe("manual");
+});
+
+test("aborts conditional mediation before manual login and when the view is removed", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__conditionalCalls = [];
+    window.__conditionalAborts = 0;
+    const credentialApi = window.PublicKeyCredential || function PublicKeyCredential() {};
+    Object.defineProperty(credentialApi, "isConditionalMediationAvailable", {
+      configurable: true,
+      value: async () => true,
+    });
+    Object.defineProperty(window, "PublicKeyCredential", {
+      configurable: true,
+      value: credentialApi,
+    });
+    Object.defineProperty(navigator, "credentials", {
+      configurable: true,
+      value: {
+        get: ({ mediation, signal }) => new Promise((resolve, reject) => {
+          window.__conditionalCalls.push(mediation || "manual");
+          signal?.addEventListener("abort", () => {
+            window.__conditionalAborts += 1;
+            reject(new DOMException("The operation was cancelled.", "AbortError"));
+          }, { once: true });
+          if (mediation !== "conditional") {
+            reject(new DOMException("The operation was cancelled.", "AbortError"));
+          }
+        }),
+      },
+    });
+  });
+  await installRoutes(page);
+  await page.goto("http://localhost/login");
+  await expect.poll(() => page.evaluate(() => window.__conditionalCalls.length)).toBe(1);
+
+  await page.getByRole("button", { name: "Kontynuuj z kluczem dostępu" }).click();
+  await expect.poll(() => page.evaluate(() => window.__conditionalAborts)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__conditionalCalls.length)).toBe(2);
+  await expect(page.locator("#passkey-login-status")).not.toHaveAttribute(
+    "data-state",
+    "error",
+  );
+
+  await page.locator("[data-passkey-form=login]").evaluate((form) => form.remove());
+  await expect.poll(() => page.evaluate(() => window.__conditionalAborts)).toBe(1);
+});
+
+test("rebinds a login form after an htmx swap", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__conditionalCalls = [];
+    const credentialApi = window.PublicKeyCredential || function PublicKeyCredential() {};
+    Object.defineProperty(credentialApi, "isConditionalMediationAvailable", {
+      configurable: true,
+      value: async () => false,
+    });
+    Object.defineProperty(window, "PublicKeyCredential", {
+      configurable: true,
+      value: credentialApi,
+    });
+    Object.defineProperty(navigator, "credentials", {
+      configurable: true,
+      value: {
+        get: async ({ mediation }) => {
+          window.__conditionalCalls.push(mediation || "manual");
+          throw new DOMException("The operation was cancelled.", "AbortError");
+        },
+      },
+    });
+  });
+  await installRoutes(page);
+  await page.goto("http://localhost/login");
+  await page.evaluate(() => {
+    const oldForm = document.querySelector("[data-passkey-form=login]");
+    const newForm = oldForm.cloneNode(true);
+    newForm.dataset.passkeyBound = "false";
+    oldForm.replaceWith(newForm);
+    document.dispatchEvent(new CustomEvent("htmx:afterSwap", {
+      detail: { elt: newForm },
+    }));
+  });
+
+  await page.getByRole("button", { name: "Kontynuuj z kluczem dostępu" }).click();
+  await expect.poll(() => page.evaluate(() => window.__conditionalCalls.length)).toBe(1);
 });

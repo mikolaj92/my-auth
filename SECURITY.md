@@ -20,9 +20,11 @@ The first provider profile is now implemented behind `my-auth[oidc]`; it is not 
 claim of OpenID Foundation certification or full OIDC Core support. Hosts must
 use HTTPS issuer/redirect configuration, durable protected signing keys, a
 trusted client registry, explicit consent/session hooks, and the documented
-support matrix. Do not expose `MemorySigningKeyStore` in production. Future
-protocol, client validation, token issuance and key-management vulnerabilities
-belong in this repository's private reporting channel.
+support matrix. Do not expose `MemorySigningKeyStore` in production. The optional passkey
+Conditional UI is browser enhancement only: its username field is not an
+identity assertion, and manual/hybrid login remains available. Future protocol,
+client validation, token issuance and key-management vulnerabilities belong in
+this repository's private reporting channel.
 
 ## Versions and support
 

@@ -98,6 +98,7 @@ class PasskeyTemplateRenderer:
             credentials=credentials or [],
             login_error_target_id=self.config.login_error_target_id,
             register_error_target_id=self.config.register_error_target_id,
+            conditional_ui=self.config.conditional_ui,
             # Drive app-factory shell lang + flag dropdown selected state.
             lang=lang,
             platform_locale=lang,
