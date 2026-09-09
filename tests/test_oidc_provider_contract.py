@@ -32,6 +32,35 @@ def test_provider_metadata_exposes_only_the_first_supported_profile() -> None:
     assert isinstance(grant_types, list)
     assert "implicit" not in response_types
     assert "password" not in grant_types
+    assert metadata["claims_supported"] == [
+        "sub",
+        "iss",
+        "aud",
+        "exp",
+        "iat",
+        "nonce",
+        "auth_time",
+        "amr",
+        "acr",
+        "name",
+        "email",
+        "email_verified",
+    ]
+    assert metadata["claim_types_supported"] == ["normal"]
+    signing_algs = metadata["id_token_signing_alg_values_supported"]
+    token_auth = metadata["token_endpoint_auth_methods_supported"]
+    assert isinstance(signing_algs, list)
+    assert isinstance(token_auth, list)
+    assert signing_algs == ["RS256"]
+    assert "HS256" not in signing_algs
+    assert token_auth == [
+        "none",
+        "client_secret_basic",
+    ]
+    assert "client_secret_post" not in token_auth
+    assert metadata["request_parameter_supported"] is False
+    assert metadata["request_uri_parameter_supported"] is False
+    assert "refresh_token" not in grant_types
 
 
 def test_client_requires_exact_redirect_and_openid_code_profile() -> None:

@@ -164,6 +164,23 @@ class OIDCProviderConfig:
                 "client_secret_basic",
             ],
             "code_challenge_methods_supported": ["S256"],
+            "claims_supported": [
+                "sub",
+                "iss",
+                "aud",
+                "exp",
+                "iat",
+                "nonce",
+                "auth_time",
+                "amr",
+                "acr",
+                "name",
+                "email",
+                "email_verified",
+            ],
+            "claim_types_supported": ["normal"],
+            "request_parameter_supported": False,
+            "request_uri_parameter_supported": False,
         }
         if self.userinfo_endpoint is not None:
             result["userinfo_endpoint"] = self.userinfo_endpoint

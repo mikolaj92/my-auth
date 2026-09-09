@@ -16,6 +16,12 @@ Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
 
 ## Unreleased
 
+- Advertise OpenID Discovery fields required by a generic relying party:
+  `claims_supported`, `claim_types_supported`, and explicit
+  `request_parameter_supported` / `request_uri_parameter_supported` false.
+  A standard RP can complete authorization-code + S256 PKCE from discovery,
+  JWKS, token, and UserInfo without my-auth-specific endpoints.
+
 - Add opt-in WebAuthn Conditional UI/autofill on the login page with a visible
   `autocomplete="username webauthn"` field. Conditional mediation is feature-
   detected; manual and hybrid login remain available, and pending prompts are

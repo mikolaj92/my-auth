@@ -46,7 +46,9 @@ are not performed by `import my_auth`.
 The first OIDC profile is an explicit authorization-code provider backed by the
 host's already-authenticated passkey session. It supports public clients,
 exact HTTPS redirects, S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo,
-short-lived one-time codes, and opaque bearer access tokens. Refresh tokens,
+short-lived one-time codes, and opaque bearer access tokens. Discovery advertises
+`claims_supported` and the implemented code+S256 surface so a generic relying
+party can swap in my-auth as any other OpenID Provider. Refresh tokens,
 implicit/hybrid/password grants, dynamic registration, and logout extensions are
 not advertised or implemented by this profile.
 

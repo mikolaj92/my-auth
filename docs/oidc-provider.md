@@ -41,7 +41,10 @@ Optional imports must not make the existing passkey core require an OIDC stack.
    public-only JWKS, key rotation, bounded token lifetimes. No secrets in logs.
 4. **Discovery and UserInfo:** advertise only functioning capabilities; issuer
    consistency, scope-based claims, access-token validation and token-type
-   separation. Never accept an ID token as an API access token.
+   separation. Discovery includes `claims_supported`, `claim_types_supported`,
+   and explicit false request-object flags so a generic RP can complete the
+   authorization-code + S256 PKCE flow from metadata alone. Never accept an ID
+   token as an API access token.
 5. **Lifecycle:** explicit refresh-token/offline-access policy, revocation,
    provider-session handling and separately specified logout extensions.
 6. **Composition:** runnable my-auth + UM + app-factory host, standard independent

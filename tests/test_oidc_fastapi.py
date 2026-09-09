@@ -108,6 +108,24 @@ def test_discovery_and_jwks_advertise_only_implemented_profile() -> None:
     assert discovery.json()["response_types_supported"] == ["code"]
     assert discovery.json()["code_challenge_methods_supported"] == ["S256"]
     assert "refresh_token" not in discovery.json()["grant_types_supported"]
+    document = discovery.json()
+    for key in (
+        "issuer",
+        "authorization_endpoint",
+        "token_endpoint",
+        "jwks_uri",
+        "userinfo_endpoint",
+        "response_types_supported",
+        "subject_types_supported",
+        "id_token_signing_alg_values_supported",
+        "claims_supported",
+    ):
+        assert key in document
+    assert document["authorization_endpoint"].startswith(document["issuer"])
+    assert document["token_endpoint"].startswith(document["issuer"])
+    assert document["jwks_uri"].startswith(document["issuer"])
+    assert document["userinfo_endpoint"].startswith(document["issuer"])
+    assert "id_token" not in document.get("token_endpoint_auth_methods_supported", [])
     assert jwks.status_code == 200
     assert len(jwks.json()["keys"]) == 1
     assert jwks.json()["keys"][0]["alg"] == "RS256"
@@ -247,3 +265,51 @@ def test_disabled_session_cannot_authorize() -> None:
 
     assert response.status_code == 401
     assert response.json()["error"] == "login_required"
+
+
+def test_generic_oidc_relying_party_can_complete_code_flow_from_discovery() -> None:
+    """A standard RP uses discovery, not my-auth-specific endpoints."""
+    client, _provider_value = _provider()
+    verifier = "v" * 43
+    discovery = client.get("/.well-known/openid-configuration").json()
+
+    authorization = client.get(
+        discovery["authorization_endpoint"].removeprefix("https://auth.example.test"),
+        params={
+            "response_type": "code",
+            "client_id": "demo-client",
+            "redirect_uri": "https://client.example.test/callback",
+            "scope": "openid profile email",
+            "state": "rp-state",
+            "nonce": "rp-nonce",
+            "code_challenge": create_s256_code_challenge(verifier),
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    code = parse_qs(urlsplit(authorization.headers["location"]).query)["code"][0]
+    token = client.post(
+        discovery["token_endpoint"].removeprefix("https://auth.example.test"),
+        data={
+            "grant_type": "authorization_code",
+            "client_id": "demo-client",
+            "code": code,
+            "redirect_uri": "https://client.example.test/callback",
+            "code_verifier": verifier,
+        },
+    ).json()
+    keys = KeySet.import_key_set(
+        client.get(
+            discovery["jwks_uri"].removeprefix("https://auth.example.test")
+        ).json()
+    )
+    claims = jwt.decode(token["id_token"], keys, algorithms=["RS256"]).claims
+    userinfo = client.get(
+        discovery["userinfo_endpoint"].removeprefix("https://auth.example.test"),
+        headers={"Authorization": f"Bearer {token['access_token']}"},
+    ).json()
+
+    assert claims["iss"] == discovery["issuer"]
+    assert claims["nonce"] == "rp-nonce"
+    assert userinfo["sub"] == claims["sub"]
+    assert set(userinfo) <= set(discovery["claims_supported"])
