@@ -165,26 +165,80 @@ class PasskeyRouteHooks:
 PasskeyFastAPIHooks = PasskeyRouteHooks
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, init=False)
 class PasskeyFastAPISettings:
+    """Validated FastAPI settings with a canonical origin allowlist."""
+
     rp_id: str
     rp_name: str
-    origin: str
-    timeout_ms: int = 60_000
-    challenge_ttl_seconds: int = 300
-    user_verification: Literal["required", "preferred", "discouraged"] = "required"
-    paths: PasskeyPaths = PasskeyPaths()
-    cookies: PasskeyCookies = PasskeyCookies()
+    origins: tuple[str, ...]
+    timeout_ms: int
+    challenge_ttl_seconds: int
+    user_verification: Literal["required", "preferred", "discouraged"]
+    paths: PasskeyPaths
+    cookies: PasskeyCookies
+
+    def __init__(
+        self,
+        rp_id: str,
+        rp_name: str,
+        origin: str | None = None,
+        timeout_ms: int = 60_000,
+        challenge_ttl_seconds: int = 300,
+        user_verification: Literal["required", "preferred", "discouraged"] = "required",
+        paths: PasskeyPaths | None = None,
+        cookies: PasskeyCookies | None = None,
+        *,
+        origins: tuple[str, ...] | None = None,
+    ) -> None:
+        if origin is not None and origins is not None:
+            raise ValueError("origin and origins cannot both be configured")
+        if origin is not None:
+            configured_origins = (origin,)
+        elif origins is not None:
+            configured_origins = origins
+        else:
+            raise ValueError("one or more origins are required")
+        validated = PasskeyConfig(
+            rp_id=rp_id,
+            rp_name=rp_name,
+            origins=configured_origins,
+            timeout_ms=timeout_ms,
+            challenge_ttl_seconds=challenge_ttl_seconds,
+            user_verification=user_verification,
+        )
+        object.__setattr__(self, "rp_id", validated.rp_id)
+        object.__setattr__(self, "rp_name", validated.rp_name)
+        object.__setattr__(self, "origins", validated.origins)
+        object.__setattr__(self, "timeout_ms", validated.timeout_ms)
+        object.__setattr__(
+            self, "challenge_ttl_seconds", validated.challenge_ttl_seconds
+        )
+        object.__setattr__(self, "user_verification", validated.user_verification)
+        object.__setattr__(self, "paths", paths or PasskeyPaths())
+        object.__setattr__(self, "cookies", cookies or PasskeyCookies())
 
     @classmethod
     def from_env(
         cls, environ: Mapping[str, str] | None = None, *, prefix: str = "PASSKEY_"
     ) -> PasskeyFastAPISettings:
         env = os.environ if environ is None else environ
+        raw_origins = env.get(f"{prefix}ORIGINS")
+        raw_origin = env.get(f"{prefix}ORIGIN")
+        if raw_origins is not None and raw_origin is not None:
+            raise ValueError(
+                f"{prefix}ORIGIN and {prefix}ORIGINS cannot both be configured"
+            )
+        if raw_origins is None and raw_origin is None:
+            raise ValueError(f"{prefix}ORIGIN or {prefix}ORIGINS is required")
+        if raw_origins is not None:
+            origins = tuple(item.strip() for item in raw_origins.split(","))
+        else:
+            origins = (raw_origin.strip(),) if raw_origin is not None else ()
         settings = cls(
             rp_id=_required_env(env, prefix, "RP_ID"),
             rp_name=_required_env(env, prefix, "RP_NAME"),
-            origin=_required_env(env, prefix, "ORIGIN"),
+            origins=origins,
             timeout_ms=_int_env(env, prefix, "TIMEOUT_MS", 60_000),
             challenge_ttl_seconds=_int_env(env, prefix, "CHALLENGE_TTL_SECONDS", 300),
             user_verification=_user_verification_env(env, prefix),
@@ -244,11 +298,16 @@ class PasskeyFastAPISettings:
         _ = settings.passkey_config()
         return settings
 
+    @property
+    def origin(self) -> str:
+        """Return the first configured origin for compatibility."""
+        return self.origins[0]
+
     def passkey_config(self) -> PasskeyConfig:
         return PasskeyConfig(
             rp_id=self.rp_id,
             rp_name=self.rp_name,
-            origin=self.origin,
+            origins=self.origins,
             timeout_ms=self.timeout_ms,
             challenge_ttl_seconds=self.challenge_ttl_seconds,
             user_verification=self.user_verification,

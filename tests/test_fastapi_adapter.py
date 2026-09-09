@@ -4,6 +4,7 @@ import tomllib
 from pathlib import Path
 from typing import Literal
 
+import pytest
 from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
 from starlette.responses import PlainTextResponse
@@ -20,6 +21,7 @@ from my_auth import (
 from my_auth.fastapi import (
     PasskeyAuthRouter,
     PasskeyCookies,
+    PasskeyFastAPISettings,
     PasskeyRouteHooks,
     RenderRegister,
 )
@@ -48,6 +50,48 @@ def test_package_reports_neutral_05x_line() -> None:
     assert "invalid historical" not in readme
     assert f"app-factory tag `{app_factory_tag}`" in readme
     assert f"blob/{app_factory_tag}/COMPAT.md" in readme
+
+
+def test_fastapi_settings_accept_canonical_origin_allowlist_and_legacy_alias() -> None:
+    settings = PasskeyFastAPISettings.from_env(
+        {
+            "PASSKEY_RP_ID": "example.com",
+            "PASSKEY_RP_NAME": "Demo",
+            "PASSKEY_ORIGINS": "https://example.com, https://login.example.com:8443",
+        }
+    )
+    assert settings.origins == (
+        "https://example.com",
+        "https://login.example.com:8443",
+    )
+    assert settings.passkey_config().origins == settings.origins
+
+    legacy = PasskeyFastAPISettings.from_env(
+        {
+            "PASSKEY_RP_ID": "localhost",
+            "PASSKEY_RP_NAME": "Demo",
+            "PASSKEY_ORIGIN": "http://localhost:8000",
+        }
+    )
+    assert legacy.origins == ("http://localhost:8000",)
+
+    direct = PasskeyFastAPISettings(
+        rp_id="localhost",
+        rp_name="Demo",
+        origin="http://localhost:8000",
+    )
+    assert direct.origins == ("http://localhost:8000",)
+    assert direct.origin == "http://localhost:8000"
+
+    with pytest.raises(ValueError, match="PASSKEY_ORIGIN and PASSKEY_ORIGINS"):
+        PasskeyFastAPISettings.from_env(
+            {
+                "PASSKEY_RP_ID": "example.com",
+                "PASSKEY_RP_NAME": "Demo",
+                "PASSKEY_ORIGIN": "https://example.com",
+                "PASSKEY_ORIGINS": "https://login.example.com",
+            }
+        )
 
 
 def test_router_contract_has_no_registration_policy_or_bootstrap_renderer_flag() -> (

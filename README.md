@@ -263,8 +263,9 @@ app.include_router(
 ```
 
 `PasskeyFastAPISettings.from_env()` requires `PASSKEY_RP_ID`,
-`PASSKEY_RP_NAME`, and `PASSKEY_ORIGIN`; it also supports the documented
-`PASSKEY_*` timeout, verification, path, and cookie settings. The default
+`PASSKEY_RP_NAME`, and either `PASSKEY_ORIGINS` (comma-separated) or the legacy
+`PASSKEY_ORIGIN`; it also supports the documented `PASSKEY_*` timeout,
+verification, path, and cookie settings. The default
 routes are `GET /login`, `GET /register`, `POST /logout`, and JSON
 `POST /api/auth/{login,register}/{options,verify}`.
 
@@ -338,9 +339,16 @@ other sensitive registration data are never rendered.
 ## Security and browser requirements
 
 Use HTTPS in production; `http://localhost` is allowed for local development.
-Keep `rp_id` and `origin` server-configured, use Secure/HttpOnly/SameSite flow
+Each configured origin is an exact browser origin; its port is part of that
+origin. Keep `rp_id` and `origins` server-configured, use Secure/HttpOnly/SameSite flow
 cookies, rotate or clear the host session on login, and protect state-changing
-routes with host CSRF controls. The optional login Conditional UI uses a visible
+routes with host CSRF controls. The legacy `origin="https://..."` constructor
+and `PASSKEY_ORIGIN` environment variable map to a one-origin allowlist; new
+hosts should use `origins=(...)` and `PASSKEY_ORIGINS` (comma-separated). Do not
+provide both forms. This server-side allowlist is unrelated to WebAuthn Related
+Origin Requests: any `.well-known/webauthn` file and its hosting are owned by
+the host, and unrelated web domains or Android origins are not automatically
+trusted. The optional login Conditional UI uses a visible
 `autocomplete="username webauthn"` field and only starts after
 `PublicKeyCredential.isConditionalMediationAvailable()` reports support; the
 manual and hybrid buttons remain the fallback. It is disabled by default for

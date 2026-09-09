@@ -22,6 +22,11 @@ Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
   cancelled on manual login, HTMX replacement, and view removal (#105). The
   feature is disabled by default for existing hosts.
 
+- Accept an explicit multi-origin WebAuthn allowlist through canonical
+  `PasskeyConfig.origins` / `PASSKEY_ORIGINS`, while retaining the legacy
+  single-origin constructor and environment aliases. Registration and
+  authentication validate against the same exact allowlist; Related Origin
+  Requests remain host-owned (#107).
 - Require FastAPI >=0.141.1 in optional adapters and HTTPX2 >=2.12.0 for tests;
   verify the actual TestClient transport and error responses (#103).
 - Align the nested app-factory source with the tested chrome generation (#95).

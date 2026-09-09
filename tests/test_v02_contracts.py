@@ -17,8 +17,8 @@ from my_auth import (
     VerifiedRegistration,
     ensure_sqlite_schema,
     inspect_sqlite_schema,
+    sqlite_schema,
 )
-import my_auth.sqlite_schema as sqlite_schema
 
 
 def test_standalone_schema_ddl_failure_rolls_back_everything(
@@ -148,6 +148,42 @@ def test_config_requires_valid_positive_and_related_rp_fields() -> None:
         )
 
 
+def test_config_accepts_multiple_exact_origins_and_rejects_conflicts() -> None:
+    config = PasskeyConfig(
+        rp_id="example.com",
+        rp_name="Demo",
+        origins=("https://example.com", "https://login.example.com:8443"),
+    )
+    assert config.origins == (
+        "https://example.com",
+        "https://login.example.com:8443",
+    )
+    assert config.origin == "https://example.com"
+
+    for invalid in (
+        ("https://example.com", "https://example.com"),
+        ("https://example.com", "https://*.example.com"),
+        ("https://example.com", "https://example.com/login"),
+        ("https://example.com", "http://login.example.com"),
+        ("https://example.com", "https://example.com:bad"),
+        ("https://example.com", "https://example.com:443"),
+    ):
+        with pytest.raises(ValueError):
+            PasskeyConfig(
+                rp_id="example.com",
+                rp_name="Demo",
+                origins=invalid,
+            )
+
+    with pytest.raises(ValueError, match="origin and origins"):
+        PasskeyConfig(
+            rp_id="example.com",
+            rp_name="Demo",
+            origin="https://example.com",
+            origins=("https://login.example.com",),
+        )
+
+
 def test_registration_rejects_credential_user_mismatch_without_persisting(
     tmp_path: Path,
 ) -> None:
@@ -177,7 +213,7 @@ def test_memory_registration_is_atomic_idempotent_and_conflict_safe() -> None:
     result = VerifiedRegistration(user, credential)
     store.save_registration(result)
     store.save_registration(result)
-    with pytest.raises(Exception):
+    with pytest.raises(PasskeyCredentialConflict):
         store.save_registration(
             VerifiedRegistration(
                 user, PasskeyCredential(b"credential", "u", b"different")

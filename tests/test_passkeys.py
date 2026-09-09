@@ -96,6 +96,68 @@ def test_verify_registration_is_persistence_free(
     assert credentials.get_user("u") is None
 
 
+def test_registration_and_authentication_pass_all_configured_origins_to_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origins = ("https://example.com", "https://login.example.com:8443")
+    service = PasskeyService(
+        config=PasskeyConfig(
+            rp_id="example.com",
+            rp_name="Demo",
+            origins=origins,
+        ),
+        challenges=(challenges := MemoryChallengeStore()),
+        credentials=(credentials := MemoryCredentialStore()),
+    )
+    user = PasskeyUser("u", b"handle", "name")
+
+    service.begin_registration(flow_id="register", user=user)
+    registration_origins: list[object] = []
+    monkeypatch.setattr(
+        "my_auth.passkeys.verify_registration_response",
+        lambda **kwargs: (
+            registration_origins.append(kwargs["expected_origin"])
+            or SimpleNamespace(
+                credential_id=b"id",
+                credential_public_key=b"pk",
+                sign_count=0,
+                credential_device_type=None,
+                credential_backed_up=None,
+            )
+        ),
+    )
+    result = service.verify_registration(
+        flow_id="register", credential={"id": "aWQ", "response": {}}
+    )
+    credentials.save_registration(result)
+
+    service.begin_authentication(flow_id="login")
+    authentication_origins: list[object] = []
+    monkeypatch.setattr(
+        "my_auth.passkeys.verify_authentication_response",
+        lambda **kwargs: (
+            authentication_origins.append(kwargs["expected_origin"])
+            or SimpleNamespace(
+                new_sign_count=0,
+                credential_device_type=None,
+                credential_backed_up=None,
+            )
+        ),
+    )
+    service.finish_authentication(
+        flow_id="login",
+        credential={
+            "id": "aWQ",
+            "rawId": "aWQ",
+            "response": {"userHandle": "aGFuZGxl"},
+        },
+    )
+
+    assert registration_origins == [list(origins)]
+    assert authentication_origins == [list(origins)]
+    assert challenges._records == {}
+
+
 def test_registration_kinds_do_not_include_bootstrap() -> None:
     from typing import get_args
 

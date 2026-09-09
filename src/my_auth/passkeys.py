@@ -219,7 +219,7 @@ class PasskeyService:
             credential=credential_data,
             expected_challenge=record.challenge,
             expected_rp_id=self.config.rp_id,
-            expected_origin=self.config.origin,
+            expected_origin=list(self.config.origins),
             require_user_verification=self.config.require_user_verification,
         )
         passkey = PasskeyCredential(
@@ -292,7 +292,7 @@ class PasskeyService:
             credential=credential_data,
             expected_challenge=record.challenge,
             expected_rp_id=self.config.rp_id,
-            expected_origin=self.config.origin,
+            expected_origin=list(self.config.origins),
             credential_public_key=stored.public_key,
             credential_current_sign_count=stored.sign_count,
             require_user_verification=self.config.require_user_verification,

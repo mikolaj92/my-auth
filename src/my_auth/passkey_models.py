@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal, Protocol
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
 from webauthn.helpers.structs import UserVerificationRequirement
 
@@ -26,60 +26,115 @@ def b64url_to_bytes(value: str) -> bytes:
     return urlsafe_b64decode((value + "=" * (-len(value) % 4)).encode("ascii"))
 
 
-def _origin_allowed(origin: str) -> bool:
-    parsed = urlparse(origin)
-    if (
-        parsed.username
-        or parsed.password
-        or parsed.query
-        or parsed.fragment
-        or not parsed.hostname
-    ):
-        return False
+def _normalize_origin(origin: str) -> str:
+    if not isinstance(origin, str) or not origin.strip():
+        raise ValueError("origin must be a non-empty string")
+    if origin != origin.strip():
+        raise ValueError("origin must not have surrounding whitespace")
+    if any(ord(character) < 0x20 for character in origin) or "\\\\" in origin:
+        raise ValueError("origin contains invalid control characters")
+    parsed = urlsplit(origin)
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"}:
+        raise ValueError("origin must use https://; http is only allowed for localhost")
     try:
-        _ = parsed.port
-    except ValueError:
-        return False
-    return parsed.scheme == "https" or (
-        parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
-    )
+        username, password, hostname, port = (
+            parsed.username,
+            parsed.password,
+            parsed.hostname,
+            parsed.port,
+        )
+    except ValueError as error:
+        raise ValueError("origin contains an invalid port or host") from error
+    if username is not None or password is not None or not hostname:
+        raise ValueError("origin must not contain userinfo and must have a host")
+    if parsed.path or parsed.query or parsed.fragment:
+        raise ValueError("origin must not contain a path, query, or fragment")
+    if "*" in hostname or any(character in hostname for character in "%/?#@"):
+        raise ValueError("origin host must be an exact hostname")
+    if parsed.netloc.endswith(":"):
+        raise ValueError("origin must not contain an empty port")
+    hostname = hostname.lower()
+    if scheme == "http" and hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise ValueError("origin must use https://; http is only allowed for localhost")
+    default_port = 80 if scheme == "http" else 443
+    port_suffix = "" if port in {None, default_port} else f":{port}"
+    host_for_url = f"[{hostname}]" if ":" in hostname else hostname
+    return f"{scheme}://{host_for_url}{port_suffix}"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, init=False)
 class PasskeyConfig:
+    """Validated WebAuthn RP configuration.
+
+    ``origins`` is the canonical stored allowlist. ``origin`` is accepted only
+    as a backwards-compatible one-origin constructor alias and is exposed as a
+    read-only view of the first configured origin.
+    """
+
     rp_id: str
     rp_name: str
-    origin: str
-    timeout_ms: int = 60_000
-    challenge_ttl_seconds: int = 300
-    user_verification: Literal["required", "preferred", "discouraged"] = "required"
+    origins: tuple[str, ...]
+    timeout_ms: int
+    challenge_ttl_seconds: int
+    user_verification: Literal["required", "preferred", "discouraged"]
 
-    def __post_init__(self) -> None:
-        for name in ("rp_id", "rp_name", "origin"):
-            value = getattr(self, name)
+    def __init__(
+        self,
+        rp_id: str,
+        rp_name: str,
+        origin: str | None = None,
+        timeout_ms: int = 60_000,
+        challenge_ttl_seconds: int = 300,
+        user_verification: Literal["required", "preferred", "discouraged"] = "required",
+        *,
+        origins: tuple[str, ...] | None = None,
+    ) -> None:
+        for name, value in (("rp_id", rp_id), ("rp_name", rp_name)):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{name} must be a non-empty string")
             if value != value.strip():
                 raise ValueError(f"{name} must not have surrounding whitespace")
-        parsed = urlparse(self.origin)
-        host = parsed.hostname or ""
-        if (
-            "://" in self.rp_id
-            or "/" in self.rp_id
-            or ":" in self.rp_id
-            or self.rp_id.lower() != self.rp_id
-        ):
+        if "://" in rp_id or "/" in rp_id or ":" in rp_id or rp_id.lower() != rp_id:
             raise ValueError("rp_id must be a lowercase hostname only")
-        if not _origin_allowed(self.origin):
-            raise ValueError(
-                "origin must be https:// in production; http is only allowed for localhost"
-            )
-        if host != self.rp_id and not host.endswith("." + self.rp_id):
-            raise ValueError("rp_id must equal or be a suffix of the origin hostname")
-        if self.timeout_ms <= 0 or self.challenge_ttl_seconds <= 0:
+        if origin is not None and origins is not None:
+            raise ValueError("origin and origins cannot both be configured")
+        if origin is not None:
+            configured_origins = (origin,)
+        elif origins is not None:
+            if isinstance(origins, str) or not isinstance(origins, tuple):
+                raise ValueError("origins must be a non-empty tuple of strings")
+            configured_origins = origins
+        else:
+            raise ValueError("one or more origins are required")
+        if not configured_origins:
+            raise ValueError("one or more origins are required")
+        normalized_origins = tuple(
+            _normalize_origin(value) for value in configured_origins
+        )
+        if len(set(normalized_origins)) != len(normalized_origins):
+            raise ValueError("origins must be unique")
+        for configured_origin in normalized_origins:
+            hostname = urlsplit(configured_origin).hostname or ""
+            if hostname != rp_id and not hostname.endswith("." + rp_id):
+                raise ValueError(
+                    "rp_id must equal or be a suffix of every origin hostname"
+                )
+        if timeout_ms <= 0 or challenge_ttl_seconds <= 0:
             raise ValueError("timeout_ms and challenge_ttl_seconds must be positive")
-        if self.user_verification not in {"required", "preferred", "discouraged"}:
+        if user_verification not in {"required", "preferred", "discouraged"}:
             raise ValueError("invalid user_verification")
+        object.__setattr__(self, "rp_id", rp_id)
+        object.__setattr__(self, "rp_name", rp_name)
+        object.__setattr__(self, "origins", normalized_origins)
+        object.__setattr__(self, "timeout_ms", timeout_ms)
+        object.__setattr__(self, "challenge_ttl_seconds", challenge_ttl_seconds)
+        object.__setattr__(self, "user_verification", user_verification)
+
+    @property
+    def origin(self) -> str:
+        """Return the first origin for compatibility with pre-allowlist hosts."""
+        return self.origins[0]
 
     @property
     def user_verification_requirement(self) -> UserVerificationRequirement:
@@ -253,5 +308,3 @@ CREATE TABLE IF NOT EXISTS passkey_challenges (
 );
 CREATE INDEX IF NOT EXISTS idx_passkey_challenges_expires_at ON passkey_challenges(expires_at);
 """
-
-
