@@ -1,6 +1,10 @@
 # my-auth
 
-[Security policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+[Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [OIDC provider direction](docs/oidc-provider.md)
+
+**Approved next direction:** my-auth will implement the OpenID Provider/server
+role itself, using its passkey login. No external IdP is required. Current
+releases do not yet implement OIDC; see the linked delivery and conformance gates.
 
 `my-auth` is a passkey-only authentication core for FastAPI/Starlette
 applications. Version 0.5 uses verification-first, neutral multi-user registration

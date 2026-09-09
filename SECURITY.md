@@ -13,7 +13,12 @@ my-auth owns WebAuthn options and verification, RP/origin configuration,
 single-use challenges, credential ownership and counters, and enrollment
 capabilities. Application sessions, CSRF policy, administrator permissions,
 provisioning, recovery authorization, and audit policy belong to the host.
-Optional HTTP/UI adapters do not turn this library into an OAuth/OIDC provider.
+The existing HTTP/UI adapters are not an OAuth/OIDC provider. The approved
+[OIDC provider direction](docs/oidc-provider.md) adds optional server-side
+protocol support in my-auth, not a dependency on an external identity server.
+Until implemented and verified, current tags must not be advertised as OIDC
+providers. Future protocol, client validation, token issuance and key-management
+vulnerabilities belong in this repository's private reporting channel.
 
 ## Versions and support
 
