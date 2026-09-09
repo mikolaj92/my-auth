@@ -135,6 +135,22 @@ def test_rate_limiter_failure_fails_closed_without_challenge_mutation() -> None:
     assert service.challenges._records == {}
 
 
+def test_invalid_rate_limiter_decision_fails_closed_without_challenge_mutation() -> (
+    None
+):
+    def invalid(request: Request, operation: RateLimitOperation) -> RateLimitDecision:
+        del request, operation
+        return RateLimitDecision(allowed="yes")  # type: ignore[arg-type]
+
+    client, service = _app(rate_limit=invalid, raise_server_exceptions=False)
+    response = client.post("/api/auth/login/options")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "authentication temporarily unavailable"}
+    assert isinstance(service.challenges, MemoryChallengeStore)
+    assert service.challenges._records == {}
+
+
 def test_router_contract_has_no_registration_policy_or_bootstrap_renderer_flag() -> (
     None
 ):

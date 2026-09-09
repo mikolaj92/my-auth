@@ -238,7 +238,8 @@ policy.
 The optional `PasskeyRouteHooks.rate_limit(request, operation)` hook runs before
 options creation or verification. It returns `RateLimitDecision.allow()` or
 `RateLimitDecision.deny(retry_after_seconds=...)`; denial returns a neutral 429
-with `Retry-After` when supplied and creates/consumes no challenge. The four
+with `Retry-After` when supplied and creates/consumes no challenge. A limiter
+exception or malformed decision fails closed with a neutral 503. The four
 operation names are `login_options`, `login_verify`, `register_options`, and
 `register_verify`. The host owns the key (for example, a trusted
 proxy-derived network key plus operation and a documented user scope), proxy

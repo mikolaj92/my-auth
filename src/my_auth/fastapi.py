@@ -72,6 +72,8 @@ class RateLimitDecision:
     retry_after_seconds: int | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.allowed, bool):
+            raise TypeError("allowed must be a boolean")
         if self.retry_after_seconds is not None and (
             isinstance(self.retry_after_seconds, bool)
             or not isinstance(self.retry_after_seconds, int)
@@ -642,6 +644,11 @@ class PasskeyAuthRouter:
                 status_code=503,
                 detail="authentication temporarily unavailable",
             ) from error
+        if not isinstance(decision, RateLimitDecision):
+            raise HTTPException(
+                status_code=503,
+                detail="authentication temporarily unavailable",
+            )
         if not decision.allowed:
             headers = (
                 {"Retry-After": str(decision.retry_after_seconds)}
