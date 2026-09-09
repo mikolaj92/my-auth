@@ -343,5 +343,6 @@ cookies, rotate or clear the host session on login, and protect state-changing
 routes with host CSRF controls. The optional login Conditional UI uses a visible
 `autocomplete="username webauthn"` field and only starts after
 `PublicKeyCredential.isConditionalMediationAvailable()` reports support; the
-manual and hybrid buttons remain the fallback. Browsers without WebAuthn need a
-host-provided recovery or fallback path.
+manual and hybrid buttons remain the fallback. It is disabled by default for
+existing hosts; enable it with `PasskeyUiConfig(conditional_ui=True)`. Browsers
+without WebAuthn need a host-provided recovery or fallback path.

@@ -33,7 +33,7 @@ class PasskeyUiConfig:
     login_error_target_id: str = "passkey-login-status"
     register_error_target_id: str = "passkey-register-status"
     # Browser autofill is an opt-in enhancement; manual login remains available.
-    conditional_ui: bool = True
+    conditional_ui: bool = False
     capability_query_param: str = "capability"
     # When set, ?lang= / cookie is applied to login/register chrome and persisted.
     locale_cookie_name: str | None = None

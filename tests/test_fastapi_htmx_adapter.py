@@ -628,6 +628,7 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
 
 
 def test_login_conditional_ui_has_visible_autofill_field_and_can_be_disabled() -> None:
+    assert PasskeyUiConfig().conditional_ui is False
     app, platform, _ = _app()
     client = TestClient(app)
     enabled_app = FastAPI()
@@ -640,8 +641,6 @@ def test_login_conditional_ui_has_visible_autofill_field_and_can_be_disabled() -
         static_path=enabled_platform.static_path,
         mount_name=enabled_platform.mount_name,
     )
-    from my_auth.fastapi_htmx import PasskeyUiConfig
-
     install_passkey_ui(
         enabled_app,
         platform=enabled_platform,

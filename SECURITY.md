@@ -22,7 +22,8 @@ use HTTPS issuer/redirect configuration, durable protected signing keys, a
 trusted client registry, explicit consent/session hooks, and the documented
 support matrix. Do not expose `MemorySigningKeyStore` in production. The optional passkey
 Conditional UI is browser enhancement only: its username field is not an
-identity assertion, and manual/hybrid login remains available. Future protocol,
+identity assertion, and manual/hybrid login remains available. It is disabled
+by default; hosts explicitly opt in with `PasskeyUiConfig(conditional_ui=True)`. Future protocol,
 client validation, token issuance and key-management vulnerabilities belong in
 this repository's private reporting channel.
 
