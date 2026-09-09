@@ -36,7 +36,57 @@ requires the compatible `app-factory>=0.6.22` generation.
 
 The core import is `my_auth`. The FastAPI router is explicitly imported from
 `my_auth.fastapi`; the server-rendered UI is explicitly imported from
-`my_auth.fastapi_htmx`. Optional imports are not performed by `import my_auth`.
+`my_auth.fastapi_htmx`. The optional OIDC protocol router is imported from
+`my_auth.oidc_fastapi` and requires the `oidc` extra. Optional framework imports
+are not performed by `import my_auth`.
+
+## Optional OIDC Provider
+
+The first OIDC profile is an explicit authorization-code provider backed by the
+host's already-authenticated passkey session. It supports public clients,
+exact HTTPS redirects, S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo,
+short-lived one-time codes, and opaque bearer access tokens. Refresh tokens,
+implicit/hybrid/password grants, dynamic registration, and logout extensions are
+not advertised or implemented by this profile.
+
+Install the optional adapter with `my-auth[oidc]` and configure a durable
+`SigningKeyStore` in production. `MemorySigningKeyStore` is for tests and
+examples only:
+
+```python
+from my_auth import OIDCClient, OIDCProvider, OIDCProviderConfig
+from my_auth.oidc_fastapi import (
+    MemorySigningKeyStore,
+    OIDCProviderHooks,
+    build_oidc_fastapi_plugin,
+)
+
+provider = OIDCProvider(
+    OIDCProviderConfig(
+        issuer="https://auth.example.test",
+        authorization_endpoint="https://auth.example.test/oauth/authorize",
+        token_endpoint="https://auth.example.test/oauth/token",
+        jwks_uri="https://auth.example.test/oauth/jwks",
+        userinfo_endpoint="https://auth.example.test/oauth/userinfo",
+    ),
+    clients=(
+        OIDCClient(
+            client_id="product",
+            redirect_uris=("https://product.example.test/oidc/callback",),
+            scopes=("openid", "profile", "email"),
+        ),
+    ),
+    signing_keys=MemorySigningKeyStore.generate(),
+)
+app.include_router(build_oidc_fastapi_plugin(provider=provider, hooks=hooks))
+```
+
+`OIDCProviderHooks.get_session_user` and `decide_consent` remain host policy
+seams. The host must also map stable local subjects and claims through
+`OIDCUserAdapter`, enforce disabled-account behavior, and protect the provider
+with its deployment/session controls. See
+[`docs/oidc-provider.md`](docs/oidc-provider.md) for the support matrix and
+conformance gates; passing the included integration tests is not certification.
 
 ## Store transaction contract
 

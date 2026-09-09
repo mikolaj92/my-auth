@@ -16,6 +16,10 @@ The tested cross-library pins live only in the
 - Add private security reporting guidance and this source history (#104).
 - Render passkey backup status badges without device-specific guarantees (#109).
 - Expose `assert_external_transaction_contract` in `my_auth.testing` for external-mode stores (#111).
+- Add the optional Authlib/FastAPI OIDC Provider authorization-code profile with
+  S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo, and explicit host
+  session/consent seams (#112). This is not an OpenID Foundation certification
+  claim; consult `docs/oidc-provider.md` for unsupported features and gates.
 
 ## 0.5.4
 

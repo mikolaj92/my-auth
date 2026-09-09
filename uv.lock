@@ -52,6 +52,19 @@ fastapi = [
 ]
 
 [[package]]
+name = "authlib"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "joserfc" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/51/bc1729d3cfdc214b4935f4e886e4dd443c3065fd8e1e66423fe84b490f81/authlib-1.8.0.tar.gz", hash = "sha256:f3ecd5f1da737262fb53bf1a4d95c4ea1ad9dd509316587a255c99ab1838a4f0", size = 177759, upload-time = "2026-08-30T12:12:34.833Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/c6/6f124bcfbbfb20fba22c939b4e43a06dccfc0e1ca20e5634ca573cb1e271/authlib-1.8.0-py2.py3-none-any.whl", hash = "sha256:88aebbd9af6757e14e912d5dc007ae1dc1f3e27e3b2152ce7c552ee2c3b3c121", size = 260804, upload-time = "2026-08-30T12:12:33.162Z" },
+]
+
+[[package]]
 name = "basedpyright"
 version = "1.39.10"
 source = { registry = "https://pypi.org/simple" }
@@ -369,6 +382,18 @@ wheels = [
 ]
 
 [[package]]
+name = "joserfc"
+version = "1.7.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/94/80fea1514b7c6d7d37804d3fe9ca81455f633347fc98731bd71ffe1faa17/joserfc-1.7.5.tar.gz", hash = "sha256:d5ff536e658e17664f8c1b1ab60dc4aa62aa973fcef1edd33cc44bda45d6f5ea", size = 234990, upload-time = "2026-08-29T13:05:42.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/c5/82addfd375e5ee6520644e0553e4aadde92d668c4fc99cc716d337fe7bb3/joserfc-1.7.5-py3-none-any.whl", hash = "sha256:add2c2c84e8373b084d526a8b53daba5d7a513a118cd2dcd9fc9f979d0922159", size = 71269, upload-time = "2026-08-29T13:05:40.718Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -454,29 +479,40 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "app-factory", extra = ["fastapi"] },
+    { name = "authlib" },
     { name = "basedpyright" },
     { name = "fastapi" },
     { name = "httpx2" },
     { name = "jinja2" },
+    { name = "joserfc" },
     { name = "pytest" },
     { name = "ruff" },
 ]
 fastapi = [
+    { name = "authlib" },
     { name = "fastapi" },
+    { name = "joserfc" },
 ]
 fastapi-htmx = [
     { name = "app-factory", extra = ["fastapi"] },
     { name = "fastapi" },
     { name = "jinja2" },
 ]
+oidc = [
+    { name = "authlib" },
+    { name = "fastapi" },
+    { name = "joserfc" },
+]
 
 [package.dev-dependencies]
 dev = [
     { name = "app-factory", extra = ["fastapi"] },
+    { name = "authlib" },
     { name = "basedpyright" },
     { name = "fastapi" },
     { name = "httpx2" },
     { name = "jinja2" },
+    { name = "joserfc" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -485,27 +521,36 @@ dev = [
 requires-dist = [
     { name = "app-factory", extras = ["fastapi"], marker = "extra == 'dev'", git = "https://github.com/mikolaj92/app-factory?tag=v0.6.22" },
     { name = "app-factory", extras = ["fastapi"], marker = "extra == 'fastapi-htmx'", git = "https://github.com/mikolaj92/app-factory?tag=v0.6.22" },
+    { name = "authlib", marker = "extra == 'dev'", specifier = ">=1.8.0" },
+    { name = "authlib", marker = "extra == 'fastapi'", specifier = ">=1.8.0" },
+    { name = "authlib", marker = "extra == 'oidc'", specifier = ">=1.8.0" },
     { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.21" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.141.1" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.141.1" },
     { name = "fastapi", marker = "extra == 'fastapi-htmx'", specifier = ">=0.141.1" },
+    { name = "fastapi", marker = "extra == 'oidc'", specifier = ">=0.141.1" },
     { name = "httpx2", marker = "extra == 'dev'", specifier = ">=2.12.0" },
     { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1" },
     { name = "jinja2", marker = "extra == 'fastapi-htmx'", specifier = ">=3.1" },
+    { name = "joserfc", marker = "extra == 'dev'", specifier = ">=1.7.5" },
+    { name = "joserfc", marker = "extra == 'fastapi'", specifier = ">=1.7.5" },
+    { name = "joserfc", marker = "extra == 'oidc'", specifier = ">=1.7.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "typing-extensions", specifier = ">=4.12" },
     { name = "webauthn", specifier = ">=3,<4" },
 ]
-provides-extras = ["fastapi", "fastapi-htmx", "dev"]
+provides-extras = ["fastapi", "fastapi-htmx", "oidc", "dev"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "app-factory", extras = ["fastapi"], git = "https://github.com/mikolaj92/app-factory?tag=v0.6.22" },
+    { name = "authlib", specifier = ">=1.8.0" },
     { name = "basedpyright", specifier = ">=1.21" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "httpx2", specifier = ">=2.12.0" },
     { name = "jinja2", specifier = ">=3.1" },
+    { name = "joserfc", specifier = ">=1.7.5" },
     { name = "pytest", specifier = ">=8" },
     { name = "ruff", specifier = ">=0.8" },
 ]

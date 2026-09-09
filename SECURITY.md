@@ -16,9 +16,13 @@ provisioning, recovery authorization, and audit policy belong to the host.
 The existing HTTP/UI adapters are not an OAuth/OIDC provider. The approved
 [OIDC provider direction](docs/oidc-provider.md) adds optional server-side
 protocol support in my-auth, not a dependency on an external identity server.
-Until implemented and verified, current tags must not be advertised as OIDC
-providers. Future protocol, client validation, token issuance and key-management
-vulnerabilities belong in this repository's private reporting channel.
+The first provider profile is now implemented behind `my-auth[oidc]`; it is not a
+claim of OpenID Foundation certification or full OIDC Core support. Hosts must
+use HTTPS issuer/redirect configuration, durable protected signing keys, a
+trusted client registry, explicit consent/session hooks, and the documented
+support matrix. Do not expose `MemorySigningKeyStore` in production. Future
+protocol, client validation, token issuance and key-management vulnerabilities
+belong in this repository's private reporting channel.
 
 ## Versions and support
 
