@@ -67,10 +67,21 @@ def assert_external_transaction_contract(
     store_factory: Callable[[sqlite3.Connection], CredentialStore],
     schema_initializer: Callable[[sqlite3.Connection], None],
 ) -> None:
-    """Verify that an external-mode store leaves persistence to the outer transaction."""
+    """Check SQLite shared commit/rollback with a host-owned record.
+
+    The factory receives an active caller-owned SQLite transaction. Non-SQLite
+    backends need their own transaction harness; this helper never skips them.
+    """
+
+    class SimulatedHostFailure(Exception):
+        pass
+
     connection = sqlite3.connect(":memory:")
     try:
         schema_initializer(connection)
+        connection.execute(
+            "CREATE TABLE _contract_host_records (user_id TEXT PRIMARY KEY)"
+        )
         user = PasskeyUser("u1", b"h1", "Alice")
         reg = VerifiedRegistration(
             user=user,
@@ -80,18 +91,38 @@ def assert_external_transaction_contract(
         )
         connection.execute("BEGIN IMMEDIATE")
         store = store_factory(connection)
-        store.save_registration(reg)
-        connection.rollback()
+        try:
+            connection.execute(
+                "INSERT INTO _contract_host_records VALUES (?)", (user.user_id,)
+            )
+            store.save_registration(reg)
+            assert connection.in_transaction, "store committed the caller transaction"
+            raise SimulatedHostFailure
+        except SimulatedHostFailure:
+            connection.rollback()
 
         connection.execute("BEGIN IMMEDIATE")
         store = store_factory(connection)
         assert store.get_credential(b"c1") is None
+        assert store.get_user(user.user_id) is None
+        assert store.get_user_by_handle(user.user_handle) is None
+        assert (
+            connection.execute("SELECT * FROM _contract_host_records").fetchall() == []
+        )
+        connection.execute(
+            "INSERT INTO _contract_host_records VALUES (?)", (user.user_id,)
+        )
         store.save_registration(reg)
+        assert connection.in_transaction, "store committed the caller transaction"
         connection.commit()
 
         connection.execute("BEGIN IMMEDIATE")
         store = store_factory(connection)
-        assert store.get_credential(b"c1") is not None
+        assert store.get_credential(b"c1") == reg.credential
+        assert store.get_user(user.user_id) == user
+        assert connection.execute(
+            "SELECT * FROM _contract_host_records"
+        ).fetchall() == [(user.user_id,)]
         connection.rollback()
     finally:
         connection.close()

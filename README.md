@@ -34,6 +34,28 @@ The core import is `my_auth`. The FastAPI router is explicitly imported from
 `my_auth.fastapi`; the server-rendered UI is explicitly imported from
 `my_auth.fastapi_htmx`. Optional imports are not performed by `import my_auth`.
 
+## Store transaction contract
+
+Hosts do not need to copy our SQLite transaction tests:
+
+```python
+from my_auth import SQLiteCredentialStore, ensure_sqlite_schema
+from my_auth.testing import assert_external_transaction_contract
+
+assert_external_transaction_contract(
+    lambda connection: SQLiteCredentialStore(connection, transaction_mode="external"),
+    ensure_sqlite_schema,
+)
+```
+
+This helper owns a disposable in-memory **SQLite** connection and passes an
+active transaction to the store factory. It checks a shared host record and
+passkey registration commit together; a forced host failure rolls back both the
+credential and user/handle records. Hidden commits fail the contract. It is not
+a portable transaction API: non-SQLite backends must use their own transaction
+harness, and memory stores cannot claim transactional compliance through a skip.
+Existing credential/challenge, CAS, ownership and idempotency tests still apply.
+
 ## Core lifecycle and registration ordering
 
 ```python
