@@ -55,6 +55,34 @@ def test_package_reports_neutral_05x_line() -> None:
     assert f"blob/{app_factory_tag}/COMPAT.md" in readme
 
 
+def test_readme_marks_post_pin_passkey_api_as_unreleased() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    version = project["project"]["version"]
+    pin = f"v{version}"
+    marker = f"Unreleased after the pinned `{pin}` tag"
+    post_pin = (
+        "`PasskeyRouteHooks.rate_limit`",
+        "`PASSKEY_ORIGINS`",
+        "`PasskeyUiConfig(conditional_ui=True)`",
+    )
+
+    assert f"git+https://github.com/mikolaj92/my-auth.git@{pin}" in readme
+    install = readme.split("## Optional OIDC Provider", 1)[0]
+    folded_install = " ".join(install.split())
+    assert marker in install
+    assert "are not in that tag" in folded_install
+    paragraphs = [part.strip() for part in readme.split("\n\n") if part.strip()]
+    for symbol in post_pin:
+        matching = [part for part in paragraphs if symbol in part]
+        assert matching, f"{symbol} missing from README"
+        assert symbol in install
+        for part in matching:
+            assert marker in part, (
+                f"{symbol} described without {marker!r}: {part[:180]!r}"
+            )
+
+
 def test_fastapi_settings_accept_canonical_origin_allowlist_and_legacy_alias() -> None:
     settings = PasskeyFastAPISettings.from_env(
         {
