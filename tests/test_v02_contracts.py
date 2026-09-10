@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 
 import pytest
 
 from my_auth import (
+    CURRENT_SCHEMA_VERSION,
     CredentialCounterConflict,
     MemoryCredentialStore,
     PasskeyConfig,
@@ -19,6 +21,8 @@ from my_auth import (
     inspect_sqlite_schema,
     sqlite_schema,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_standalone_schema_ddl_failure_rolls_back_everything(
@@ -252,6 +256,19 @@ def test_counter_cas_rejects_stale_nonzero_and_preserves_zero_behavior() -> None
         backed_up=None,
     )
     assert updated.sign_count == 0
+
+
+def test_readme_current_schema_version_matches_stamped_schema() -> None:
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    documented = re.search(r"The current schema version is `(\d+)`\.", readme)
+    assert documented is not None
+    assert int(documented.group(1)) == CURRENT_SCHEMA_VERSION
+    connection = sqlite3.connect(":memory:")
+    ensure_sqlite_schema(connection)
+    inspection = inspect_sqlite_schema(connection)
+    assert inspection.state == "current"
+    assert inspection.version == CURRENT_SCHEMA_VERSION
+    assert inspection.version == int(documented.group(1))
 
 
 def test_schema_must_be_explicit_and_is_versioned(tmp_path: Path) -> None:

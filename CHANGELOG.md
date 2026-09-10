@@ -46,6 +46,7 @@ Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
 - Add private security reporting guidance and this source history (#104).
 - Render passkey backup status badges without device-specific guarantees (#109).
 - Expose `assert_external_transaction_contract` in `my_auth.testing` for external-mode stores (#111).
+- Document the current SQLite schema version as `3`, matching `CURRENT_SCHEMA_VERSION` and `inspect_sqlite_schema().version` (#113).
 ## 0.5.4
 
 - Merge request-local platform context before rendering, avoiding duplicate
