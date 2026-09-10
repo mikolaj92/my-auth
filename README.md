@@ -171,7 +171,7 @@ with sqlite3.connect("app.sqlite3") as connection:
         raise RuntimeError("unsupported schema: " + "; ".join(state.diagnostics))
 ```
 
-The current schema version is `2`. `ensure_sqlite_schema` creates/stamps an
+The current schema version is `3`. `ensure_sqlite_schema` creates/stamps an
 empty or canonical-unversioned schema and is idempotent; it never migrates a
 legacy layout. `migrate_sqlite_schema` migrates the supported 0.1 layout
 atomically, including the legacy `flow_key` challenge column, and rolls back
