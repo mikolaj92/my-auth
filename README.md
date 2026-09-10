@@ -29,6 +29,10 @@ uv add "my-auth[fastapi-htmx] @ git+https://github.com/mikolaj92/my-auth.git@v0.
 
 Pin the immutable 0.5.x tag selected by the platform BOM. Hosts should use
 `my-auth>=0.5,<0.6` and must not mix incompatible identity generations.
+Unreleased after the pinned `v0.5.5` tag: `PasskeyRouteHooks.rate_limit`,
+`PASSKEY_ORIGINS`, and `PasskeyUiConfig(conditional_ui=True)` are not in that
+tag. They exist on this tree and in CHANGELOG Unreleased; pin a later tag once
+one exists.
 
 This repository uses app-factory tag `v0.6.22` to test the optional HTMX
 adapter. It is a library, not a production host using `app-factory[platform]`,
@@ -238,7 +242,8 @@ separate challenge cookies: `passkey_authentication_challenge` and
 sessions. CSRF middleware is intentionally absent; the host applies its CSRF
 policy.
 
-The optional `PasskeyRouteHooks.rate_limit(request, operation)` hook runs before
+Unreleased after the pinned `v0.5.5` tag: the optional
+`PasskeyRouteHooks.rate_limit(request, operation)` hook runs before
 options creation or verification. It returns `RateLimitDecision.allow()` or
 `RateLimitDecision.deny(retry_after_seconds=...)`; denial returns a neutral 429
 with `Retry-After` when supplied and creates/consumes no challenge. A limiter
@@ -278,10 +283,11 @@ app.include_router(
 )
 ```
 
-`PasskeyFastAPISettings.from_env()` requires `PASSKEY_RP_ID`,
-`PASSKEY_RP_NAME`, and either `PASSKEY_ORIGINS` (comma-separated) or the legacy
-`PASSKEY_ORIGIN`; it also supports the documented `PASSKEY_*` timeout,
-verification, path, and cookie settings. The default
+Unreleased after the pinned `v0.5.5` tag, `PasskeyFastAPISettings.from_env()`
+requires `PASSKEY_RP_ID`, `PASSKEY_RP_NAME`, and either `PASSKEY_ORIGINS`
+(comma-separated) or the legacy `PASSKEY_ORIGIN`; it also supports the
+documented `PASSKEY_*` timeout, verification, path, and cookie settings.
+The pinned `v0.5.5` install still requires only `PASSKEY_ORIGIN`. The default
 routes are `GET /login`, `GET /register`, `POST /logout`, and JSON
 `POST /api/auth/{login,register}/{options,verify}`.
 
@@ -358,14 +364,14 @@ Use HTTPS in production; `http://localhost` is allowed for local development.
 Each configured origin is an exact browser origin; its port is part of that
 origin. Keep `rp_id` and `origins` server-configured, use Secure/HttpOnly/SameSite flow
 cookies, rotate or clear the host session on login, and protect state-changing
-routes with host CSRF controls. The legacy `origin="https://..."` constructor
-and `PASSKEY_ORIGIN` environment variable map to a one-origin allowlist; new
-hosts should use `origins=(...)` and `PASSKEY_ORIGINS` (comma-separated). Do not
-provide both forms. This server-side allowlist is unrelated to WebAuthn Related
-Origin Requests: any `.well-known/webauthn` file and its hosting are owned by
-the host, and unrelated web domains or Android origins are not automatically
-trusted. The optional login Conditional UI uses a visible
-`autocomplete="username webauthn"` field and only starts after
+routes with host CSRF controls. Unreleased after the pinned `v0.5.5` tag: the legacy `origin="https://..."`
+constructor and `PASSKEY_ORIGIN` environment variable map to a one-origin
+allowlist; new hosts should use `origins=(...)` and `PASSKEY_ORIGINS`
+(comma-separated). Do not provide both forms. This server-side allowlist is
+unrelated to WebAuthn Related Origin Requests: any `.well-known/webauthn` file
+and its hosting are owned by the host, and unrelated web domains or Android
+origins are not automatically trusted. The optional login Conditional UI uses a
+visible `autocomplete="username webauthn"` field and only starts after
 `PublicKeyCredential.isConditionalMediationAvailable()` reports support; the
 manual and hybrid buttons remain the fallback. It is disabled by default for
 existing hosts; enable it with `PasskeyUiConfig(conditional_ui=True)`. Browsers
