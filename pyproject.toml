@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "my-auth"
 version = "0.5.5"
-description = "Minimal reusable passkey helpers for Python web apps"
+description = "Minimal OpenID Provider with passkey login for Python web apps"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

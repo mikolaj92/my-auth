@@ -16,14 +16,14 @@ rate-limit keys, trusted proxy policy, quotas, failure mode, and shared
 multi-worker storage. Application sessions, CSRF policy, administrator
 permissions,
 provisioning, recovery authorization, and audit policy belong to the host.
-The existing HTTP/UI adapters are not an OAuth/OIDC provider. The approved
-[OIDC provider direction](docs/oidc-provider.md) adds optional server-side
-protocol support in my-auth, not a dependency on an external identity server.
-The first provider profile is now implemented behind `my-auth[oidc]`; it is not a
-claim of OpenID Foundation certification or full OIDC Core support. Hosts must
-use HTTPS issuer/redirect configuration, durable protected signing keys, a
-trusted client registry, explicit consent/session hooks, and the documented
-support matrix. Do not expose `MemorySigningKeyStore` in production. The optional passkey
+The passkey HTTP/UI adapters are a WebAuthn relying party, not the OIDC surface.
+The optional [minimal OpenID Provider](docs/oidc-provider.md) is implemented
+behind `my-auth[oidc]`. A generic relying party uses discovery, authorization-code
++ S256 PKCE, JWKS, and UserInfo; it is not a claim of OpenID Foundation
+certification or full OIDC Core support. Hosts must use HTTPS issuer/redirect
+configuration, durable protected signing keys, a trusted client registry,
+explicit consent/session hooks, and the documented support matrix. Do not expose
+`MemorySigningKeyStore` in production. The optional passkey
 Conditional UI is browser enhancement only: its username field is not an
 identity assertion, and manual/hybrid login remains available. It is disabled
 by default; hosts explicitly opt in with `PasskeyUiConfig(conditional_ui=True)`. Future protocol,

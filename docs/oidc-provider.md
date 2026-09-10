@@ -1,71 +1,81 @@
-# Decision: my-auth is the OpenID Provider
+# my-auth is a minimal OpenID Provider
 
-## Direction and current status
+A host application talks to my-auth the same way it talks to any other OpenID
+Provider: discovery, authorization-code + S256 PKCE, JWKS, ID token, and
+UserInfo. Passkeys stay behind that protocol. When the host outgrows this
+profile, it swaps the issuer URL — not the product domain, local `user_id`, or
+grants.
 
-The owner explicitly approved implementing the **provider/server** side of OIDC
-in my-auth. Earlier plans to use Keycloak as the application's provider were a
-misinterpretation and are superseded. No external identity server is required.
-The existing released package is still a WebAuthn relying party, NOT an OIDC
-provider. This decision does not assert implementation or certification.
+This is not Keycloak, not a certified OP, and not a proxy for arbitrary identity
+workflows. The passkey core (`import my_auth`) stays usable without Authlib.
+The provider is the optional `my-auth[oidc]` extra.
 
-WebAuthn RP and OpenID Provider are different roles: my-auth verifies the user's
-passkey and, as OP, will authorize registered OIDC clients and issue tokens.
+## Shipped profile
+
+| Surface | Support |
+|---|---|
+| Discovery | `/.well-known/openid-configuration` advertises only this profile |
+| Authorization | `response_type=code`; `openid` scope, `nonce`, and S256 PKCE required |
+| Token | `grant_type=authorization_code` only; one-time codes bound to client, redirect, subject, PKCE |
+| ID token | RS256, public JWKS, `kid`; never accept an ID token as an API access token |
+| UserInfo | Bearer access token; claims filtered by granted `openid` / `profile` / `email` |
+| Clients | Immutable registered clients; exact HTTPS redirects; `none` or `client_secret_basic` |
+| Subjects | `public` only |
+
+Discovery includes `claims_supported`, `claim_types_supported: ["normal"]`, and
+explicit `request_parameter_supported` / `request_uri_parameter_supported` false
+so a generic relying party can complete the flow from metadata alone.
+
+WebAuthn RP and OpenID Provider are different roles in the same package: my-auth
+verifies the user's passkey and, as OP, authorizes registered OIDC clients and
+issues tokens from that already-authenticated session.
+
+## Out of scope for this profile
+
+Do not advertise or implement these, and do not let a host depend on them if it
+must remain swappable onto my-auth:
+
+- refresh tokens / `offline_access`
+- implicit, hybrid, or password grants
+- `client_secret_post`, HS256, `alg=none`
+- dynamic client registration
+- request objects / `request_uri`
+- RP-Initiated, session, front-channel, or back-channel logout
+- pairwise subjects
+- OpenID Foundation certification
+
+Revocation is optional and public-client only. It is not full RFC 7009.
+
+Passing the included tests is not certification.
 
 ## Ownership
 
 - my-auth: optional OIDC protocol/server modules, registered clients, exact
   redirect validation, grants, authorization codes, token issuance, keys/JWKS,
-  discovery, UserInfo, provider-session and consent mechanics.
+  discovery, UserInfo, and host session/consent seams.
 - my-usermanager: stable users, current account status, claims projection and
   local grants. No automatic translation of client scopes into administrator
   permissions, and no second user directory in my-auth.
 - app-factory: shared shells and composition of packaged identity pages. No
   protocol implementation or product-specific workflow in chrome.
-- host: configured issuer, key storage, trusted clients, deployment, consent and
-  claim-release policy, account provisioning and session/recovery policy.
+- host: configured issuer, durable signing keys, trusted clients, deployment,
+  consent and claim-release policy, account provisioning, and session/recovery
+  policy. Production must not use `MemorySigningKeyStore`.
 
 Use Authlib's authorization-server/OIDC grants and maintained JOSE primitives;
 do not implement cryptography or fork protocol validation into product apps.
 Optional imports must not make the existing passkey core require an OIDC stack.
 
-## Delivery gates (not claims of current support)
+## Remaining proof (not extra protocol)
 
-1. **Protocol seam and clients:** explicit issuer, immutable client metadata,
-   exact redirect matching, allowed scopes/response types/auth methods, errors
-   that never redirect to unvalidated targets. Test before protocol handlers.
-2. **Authorization Code + S256 PKCE:** integrate the existing verified passkey
-   session; consent, state echo, nonce, prompt/max_age, error behavior; short-lived
-   one-time codes bound to client, redirect, subject and PKCE. Atomic redemption.
-3. **Tokens and keys:** Authlib-backed token endpoint, client authentication,
-   ID-token claims, signature/algorithm restrictions, durable signing keys,
-   public-only JWKS, key rotation, bounded token lifetimes. No secrets in logs.
-4. **Discovery and UserInfo:** advertise only functioning capabilities; issuer
-   consistency, scope-based claims, access-token validation and token-type
-   separation. Discovery includes `claims_supported`, `claim_types_supported`,
-   and explicit false request-object flags so a generic RP can complete the
-   authorization-code + S256 PKCE flow from metadata alone. Never accept an ID
-   token as an API access token.
-5. **Lifecycle:** explicit refresh-token/offline-access policy, revocation,
-   provider-session handling and separately specified logout extensions.
-6. **Composition:** runnable my-auth + UM + app-factory host, standard independent
-   OIDC client, actual passkey browser login, local account/disabled checks.
-7. **Conformance:** record selected OpenID Foundation OP test-plan identifiers,
-   versions, configuration and complete results. Negative/replay/concurrency and
-   rotation tests run in CI. No release claim of full compliance from a smoke.
-
-## Meaning of full compliance
-
-Maintain an explicit support matrix against OIDC Core and each chosen extension.
-Authorization Code is the first vertical slice, not the definition of completion.
-Assess additional response types, response modes, subject types, client auth,
-registration, request objects and logout against their normative requirements
-and security guidance. Optional features must be marked supported, unsupported
-or planned rather than silently implied. Certification is a separate claim,
-made only after the applicable OpenID Foundation process is completed.
+The protocol slice above is implemented. What is still required for the product
+contract is one host that logs in only as a generic relying party against this
+issuer, then against another OP (for example Keycloak), with the same local
+`user_id` and grants. That proof lives in my-usermanager, not in growing this
+profile.
 
 Sources:
 - https://openid.net/specs/openid-connect-core-1_0.html
 - https://openid.net/specs/openid-connect-discovery-1_0.html
-- https://openid.net/certification/
 - https://docs.authlib.org/en/latest/oauth2/server.html
 - https://docs.authlib.org/en/latest/oidc/core/grants.html

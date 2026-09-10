@@ -2,14 +2,15 @@
 
 [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [OIDC provider profile](docs/oidc-provider.md)
 
-**Current optional direction:** my-auth implements the first OpenID
-Provider/server profile itself, using its passkey login. No external IdP is
-required. It is available through the `my-auth[oidc]` extra; see the linked
-support matrix and conformance gates.
+**Product identity:** my-auth is a minimal OpenID Provider. A generic relying
+party talks to it through discovery, authorization-code + S256 PKCE, JWKS, and
+UserInfo, then can swap the issuer for another OP without rewriting the app.
+Passkeys stay behind that protocol. The profile is the `my-auth[oidc]` extra;
+see the linked support matrix. This is not OpenID Foundation certification.
 
-`my-auth` is a passkey-only authentication core for FastAPI/Starlette
-applications. Version 0.5 uses verification-first, neutral multi-user registration
-and explicit, versioned SQLite schema ownership. Enrollment exposure and grants
+`my-auth` is also a passkey-only WebAuthn RP for FastAPI/Starlette applications.
+Version 0.5 uses verification-first, neutral multi-user registration and
+explicit, versioned SQLite schema ownership. Enrollment exposure and grants
 belong to each host application.
 
 The package provides RP configuration, WebAuthn options and verification,
@@ -43,14 +44,14 @@ are not performed by `import my_auth`.
 
 ## Optional OIDC Provider
 
-The first OIDC profile is an explicit authorization-code provider backed by the
-host's already-authenticated passkey session. It supports public clients,
-exact HTTPS redirects, S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo,
-short-lived one-time codes, and opaque bearer access tokens. Discovery advertises
+The shipped OIDC profile is a minimal OpenID Provider backed by the host's
+already-authenticated passkey session. It supports public clients, exact HTTPS
+redirects, S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo, short-lived
+one-time codes, and opaque bearer access tokens. Discovery advertises
 `claims_supported` and the implemented code+S256 surface so a generic relying
-party can swap in my-auth as any other OpenID Provider. Refresh tokens,
-implicit/hybrid/password grants, dynamic registration, and logout extensions are
-not advertised or implemented by this profile.
+party can pin this issuer and later swap it for another OpenID Provider. Refresh
+tokens, implicit/hybrid/password grants, dynamic registration, and logout
+extensions are not advertised or implemented by this profile.
 
 Install the optional adapter with `my-auth[oidc]` and configure a durable
 `SigningKeyStore` in production. `MemorySigningKeyStore` is for tests and

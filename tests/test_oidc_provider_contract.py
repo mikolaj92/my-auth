@@ -1,5 +1,7 @@
 """Contract-first seam for the my-auth OpenID Provider."""
 
+from pathlib import Path
+
 import pytest
 
 from my_auth.oidc import (
@@ -11,6 +13,40 @@ from my_auth.oidc import (
     create_s256_code_challenge,
     validate_client_redirect,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_docs_present_my_auth_as_a_minimal_pluggable_openid_provider() -> None:
+    """Product identity: a tiny OP a generic RP can pin, then swap."""
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    decision = (REPO_ROOT / "docs" / "oidc-provider.md").read_text(encoding="utf-8")
+    security = (REPO_ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    project = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    folded_readme = " ".join(readme.split()).casefold()
+    folded_decision = " ".join(decision.split()).casefold()
+
+    for stale in (
+        "NOT an OIDC provider",
+        "will authorize registered OIDC clients",
+        "The existing HTTP/UI adapters are not an OAuth/OIDC provider.",
+    ):
+        assert stale not in readme
+        assert stale not in decision
+        assert stale not in security
+
+    assert "minimal OpenID Provider" in readme
+    assert "minimal OpenID Provider" in decision
+    assert "generic relying party" in folded_readme
+    assert "swap" in folded_readme
+    assert (
+        "authorization-code + s256 pkce" in folded_decision
+        or "authorization code + s256 pkce" in folded_decision
+    )
+    assert "refresh tokens" in folded_decision
+    assert "certification" in folded_decision
+    assert "OpenID Provider" in project
+    assert "passkey helpers" not in project
 
 
 def test_provider_metadata_exposes_only_the_first_supported_profile() -> None:

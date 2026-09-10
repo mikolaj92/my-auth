@@ -16,6 +16,11 @@ Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
 
 ## Unreleased
 
+- State the product identity as a minimal, pluggable OpenID Provider: a generic
+  relying party pins discovery/authorize/token/JWKS/UserInfo and can later swap
+  the issuer. Refresh tokens, logout extensions, and OpenID Foundation
+  certification stay out of this profile, not as unfinished protocol work.
+
 - Advertise OpenID Discovery fields required by a generic relying party:
   `claims_supported`, `claim_types_supported`, and explicit
   `request_parameter_supported` / `request_uri_parameter_supported` false.
