@@ -5,15 +5,6 @@ Entries describe source changes. A Git tag is not necessarily a published
 The tested cross-library pins live only in the
 [app-factory compatibility matrix](https://github.com/mikolaj92/app-factory/blob/main/COMPAT.md).
 
-## 0.5.5
-
-- Add the optional Authlib/FastAPI OIDC Provider authorization-code profile with
-  S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo, and explicit host
-  session/consent seams (#112). This is not an OpenID Foundation certification
-  claim; consult `docs/oidc-provider.md` for unsupported features and gates.
-
-Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
-
 ## Unreleased
 
 - State the product identity as a minimal, pluggable OpenID Provider: a generic
@@ -42,6 +33,22 @@ Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
   429 responses, optional `Retry-After`, and no challenge mutation on denial.
   Limiter failures or malformed decisions fail closed with a neutral 503. Hosts
   retain ownership of keys, proxy trust, storage, and fail-closed policy (#108).
+- Document the current SQLite schema version as `3`, matching
+  `CURRENT_SCHEMA_VERSION` and `inspect_sqlite_schema().version` (#113).
+- Mark `PasskeyRouteHooks.rate_limit`, `PASSKEY_ORIGINS`, and Conditional UI as
+  unreleased after the pinned `v0.5.5` install tag (#114).
+- Drop the npm Playwright toolchain; browser coverage uses the uv
+  `playwright` extra.
+
+`pyproject.toml` still reports `0.5.5` to match the pinned install tag. This
+tree is not that tag.
+
+## 0.5.5
+
+- Add the optional Authlib/FastAPI OIDC Provider authorization-code profile with
+  S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo, and explicit host
+  session/consent seams (#112). This is not an OpenID Foundation certification
+  claim; consult `docs/oidc-provider.md` for unsupported features and gates.
 - Require FastAPI >=0.141.1 in optional adapters and HTTPX2 >=2.12.0 for tests;
   verify the actual TestClient transport and error responses (#103).
 - Align the nested app-factory source with the tested chrome generation (#95).
@@ -51,8 +58,9 @@ Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
 - Add private security reporting guidance and this source history (#104).
 - Render passkey backup status badges without device-specific guarantees (#109).
 - Expose `assert_external_transaction_contract` in `my_auth.testing` for external-mode stores (#111).
-- Document the current SQLite schema version as `3`, matching `CURRENT_SCHEMA_VERSION` and `inspect_sqlite_schema().version` (#113).
-- Mark `PasskeyRouteHooks.rate_limit`, `PASSKEY_ORIGINS`, and Conditional UI as unreleased after the pinned `v0.5.5` install tag (#114).
+
+Source: [tag v0.5.5](https://github.com/mikolaj92/my-auth/tree/v0.5.5).
+
 ## 0.5.4
 
 - Merge request-local platform context before rendering, avoiding duplicate

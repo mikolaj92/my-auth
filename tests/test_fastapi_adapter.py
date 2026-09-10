@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 from typing import Literal
@@ -53,6 +54,42 @@ def test_package_reports_neutral_05x_line() -> None:
     assert "invalid historical" not in readme
     assert f"app-factory tag `{app_factory_tag}`" in readme
     assert f"blob/{app_factory_tag}/COMPAT.md" in readme
+
+
+def test_changelog_unreleased_is_only_work_after_the_pinned_tag() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    version = project["project"]["version"]
+    headings = re.findall(r"^## (.+)$", changelog, flags=re.MULTILINE)
+
+    assert headings[0] == "Unreleased"
+    assert headings[1] == version
+    assert headings == ["Unreleased"] + sorted(
+        headings[1:], key=lambda item: tuple(int(part) for part in item.split(".")), reverse=True
+    )
+
+    unreleased_body = changelog.split("## Unreleased", 1)[1].split(f"## {version}", 1)[0]
+    tagged_body = changelog.split(f"## {version}", 1)[1].split("## ", 1)[0]
+
+    already_in_tag = (
+        "(#103)",
+        "(#95)",
+        "(#96)",
+        "(#97)",
+        "(#98)",
+        "(#104)",
+        "(#109)",
+        "(#111)",
+    )
+    after_tag = ("(#105)", "(#107)", "(#108)", "(#113)", "(#114)")
+    for marker in already_in_tag:
+        assert marker not in unreleased_body, marker
+        assert marker in tagged_body, marker
+    for marker in after_tag:
+        assert marker in unreleased_body, marker
+        assert marker not in tagged_body, marker
+    assert "still reports" in unreleased_body
+    assert version in unreleased_body
 
 
 def test_readme_marks_post_pin_passkey_api_as_unreleased() -> None:
