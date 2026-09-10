@@ -38,6 +38,9 @@ dev = [
   "pytest>=8",
   "ruff>=0.8",
 ]
+browser = [
+  "playwright>=1.62",
+]
 
 [tool.uv.sources]
 app-factory = { git = "https://github.com/mikolaj92/app-factory", tag = "v0.6.22" }
