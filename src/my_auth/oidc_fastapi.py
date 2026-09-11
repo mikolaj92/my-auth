@@ -612,13 +612,12 @@ class OIDCProviderRouter:
             return _oauth_json_error("invalid_request", status_code=400)
 
     async def userinfo(self, request: Request) -> Response:
-        authorization = request.headers.get("Authorization", "")
-        parts = authorization.split()
-        if len(parts) != 2 or parts[0].casefold() != "bearer":
+        token = await _bearer_access_token(request, max_body_bytes=self.max_body_bytes)
+        if token is None:
             return _oauth_json_error(
                 "invalid_token", status_code=401, www_authenticate=True
             )
-        record = self.provider.tokens.get_access_token(parts[1])
+        record = self.provider.tokens.get_access_token(token)
         if record is None or record.token_type.casefold() != "bearer":
             return _oauth_json_error(
                 "invalid_token", status_code=401, www_authenticate=True
@@ -770,8 +769,31 @@ def _oauth_json_error(
 ) -> JSONResponse:
     headers = _json_headers()
     if www_authenticate:
-        headers["WWW-Authenticate"] = "Bearer"
+        headers["WWW-Authenticate"] = f'Bearer error="{error}"'
     return JSONResponse({"error": error}, status_code=status_code, headers=headers)
+
+
+async def _bearer_access_token(request: Request, *, max_body_bytes: int) -> str | None:
+    authorization = request.headers.get("Authorization", "")
+    parts = authorization.split()
+    header_token = (
+        parts[1] if len(parts) == 2 and parts[0].casefold() == "bearer" else None
+    )
+    body_token: str | None = None
+    if request.method == "POST":
+        raw = await request.body()
+        if len(raw) > max_body_bytes:
+            return None
+        try:
+            values = _form_values(raw)
+        except (UnicodeDecodeError, InvalidRequestError):
+            return None
+        candidate = values.get("access_token", [None])[0]
+        if isinstance(candidate, str) and candidate:
+            body_token = candidate
+    if header_token and body_token:
+        return None
+    return header_token or body_token
 
 
 async def _maybe_await(value: MaybeAwaitable[T]) -> T:

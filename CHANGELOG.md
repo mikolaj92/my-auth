@@ -7,6 +7,13 @@ The tested cross-library pins live only in the
 
 ## Unreleased
 
+- Prove the advertised OpenID profile at the HTTP seam: ID tokens carry `iat`,
+  `auth_time`, and `at_hash`; confidential clients redeem codes with
+  `client_secret_basic`; consent denial returns `access_denied` to the client;
+  token responses send `Cache-Control: no-store`; UserInfo accepts a Bearer
+  token in the POST body; 401 UserInfo advertises RFC 6750
+  `WWW-Authenticate: Bearer error="..."`.
+
 - One FastAPI app is both the minimal OpenID Provider and the relying party:
   unauthenticated authorize redirects to a same-origin `login_url` with `next`;
   `prompt=none` still returns `login_required` to the client. No second server.

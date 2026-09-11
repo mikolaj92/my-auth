@@ -24,7 +24,7 @@ is the optional `my-auth[oidc]` extra.
 | Authorization | `response_type=code`; `openid` scope, `nonce`, and S256 PKCE required. No session → same-origin `login_url` (optional). `prompt=none` → client `login_required` |
 | Token | `grant_type=authorization_code` only; one-time codes bound to client, redirect, subject, PKCE |
 | ID token | RS256, public JWKS, `kid`; never accept an ID token as an API access token |
-| UserInfo | Bearer access token; claims filtered by granted `openid` / `profile` / `email` |
+| UserInfo | Bearer access token in the Authorization header or POST body; claims filtered by granted `openid` / `profile` / `email`; 401 includes RFC 6750 `WWW-Authenticate` `error` |
 | Clients | Immutable registered clients; exact HTTPS redirects; `none` or `client_secret_basic` |
 | Subjects | `public` only |
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from authlib.oidc.core.grants.util import create_half_hash
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.testclient import TestClient
@@ -19,6 +21,7 @@ from my_auth.oidc import (
     OIDCProviderConfig,
     OIDCUserAdapter,
     create_s256_code_challenge,
+    hash_client_secret,
 )
 from my_auth.oidc_fastapi import (
     MemorySigningKeyStore,
@@ -38,7 +41,13 @@ class _User:
     authenticated_at: datetime = datetime(2026, 1, 1, tzinfo=UTC)
 
 
-def _provider(*, user: _User | None = None, authentication_time=None):
+def _provider(
+    *,
+    user: _User | None = None,
+    authentication_time=None,
+    client: OIDCClient | None = None,
+    consent_result: bool = True,
+):
     current_user = user or _User()
     config = OIDCProviderConfig(
         issuer="https://auth.example.test",
@@ -47,7 +56,7 @@ def _provider(*, user: _User | None = None, authentication_time=None):
         jwks_uri="https://auth.example.test/oauth/jwks",
         userinfo_endpoint="https://auth.example.test/oauth/userinfo",
     )
-    client = OIDCClient(
+    client = client or OIDCClient(
         client_id="demo-client",
         redirect_uris=("https://client.example.test/callback",),
         scopes=("openid", "profile", "email"),
@@ -76,7 +85,7 @@ def _provider(*, user: _User | None = None, authentication_time=None):
         return current_user
 
     async def consent(_request: Request, _context: OIDCConsentContext):
-        return True
+        return consent_result
 
     hooks = OIDCProviderHooks(get_session_user=session, decide_consent=consent)
     app = FastAPI()
@@ -585,3 +594,142 @@ def test_one_app_is_both_openid_provider_and_relying_party() -> None:
     home = client.get("/")
     assert home.json() == {"user_id": "user-1"}
     assert session["state"] == "app-state"
+
+
+def _issued_tokens(
+    client: TestClient, *, verifier: str = "v" * 43
+) -> dict[str, object]:
+    authorization = _authorize(client, verifier=verifier)
+    code = parse_qs(urlsplit(authorization.headers["location"]).query)["code"][0]
+    token = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": "demo-client",
+            "code": code,
+            "redirect_uri": "https://client.example.test/callback",
+            "code_verifier": verifier,
+        },
+    )
+    assert token.status_code == 200
+    return token.json()
+
+
+def test_id_token_includes_iat_auth_time_and_at_hash() -> None:
+    client, _provider_value = _provider()
+    token_data = _issued_tokens(client)
+    public_keys = KeySet.import_key_set(client.get("/oauth/jwks").json())
+    decoded = jwt.decode(token_data["id_token"], public_keys, algorithms=["RS256"])
+    now = int(datetime.now(UTC).timestamp())
+
+    assert decoded.claims["iat"] <= now <= decoded.claims["exp"]
+    assert decoded.claims["auth_time"] == int(_User.authenticated_at.timestamp())
+    assert decoded.claims["at_hash"] == create_half_hash(
+        token_data["access_token"], "RS256"
+    ).decode("ascii")
+
+
+def test_token_response_is_not_stored_by_intermediaries() -> None:
+    client, _provider_value = _provider()
+    authorization = _authorize(client)
+    code = parse_qs(urlsplit(authorization.headers["location"]).query)["code"][0]
+    token = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": "demo-client",
+            "code": code,
+            "redirect_uri": "https://client.example.test/callback",
+            "code_verifier": "v" * 43,
+        },
+    )
+
+    assert token.status_code == 200
+    assert token.headers["cache-control"] == "no-store"
+
+
+def test_confidential_client_redeems_code_with_client_secret_basic() -> None:
+    secret = "test-confidential-secret"
+    registered = OIDCClient(
+        client_id="confidential-client",
+        redirect_uris=("https://client.example.test/callback",),
+        scopes=("openid", "profile"),
+        client_secret_hash=hash_client_secret(secret),
+    )
+    client, _provider_value = _provider(client=registered)
+    verifier = "v" * 43
+    authorization = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": registered.client_id,
+            "redirect_uri": registered.redirect_uris[0],
+            "scope": "openid profile",
+            "state": "state-confidential",
+            "nonce": "nonce-confidential",
+            "code_challenge": create_s256_code_challenge(verifier),
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert authorization.status_code == 302
+    code = parse_qs(urlsplit(authorization.headers["location"]).query)["code"][0]
+    basic = base64.b64encode(f"{registered.client_id}:{secret}".encode()).decode()
+
+    token = client.post(
+        "/oauth/token",
+        headers={"Authorization": f"Basic {basic}"},
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": registered.redirect_uris[0],
+            "code_verifier": verifier,
+        },
+    )
+
+    assert token.status_code == 200
+    assert token.json()["token_type"] == "Bearer"
+    public_keys = KeySet.import_key_set(client.get("/oauth/jwks").json())
+    decoded = jwt.decode(token.json()["id_token"], public_keys, algorithms=["RS256"])
+    assert decoded.claims["aud"] == registered.client_id
+
+
+def test_consent_denial_returns_access_denied_to_validated_client() -> None:
+    client, _provider_value = _provider(consent_result=False)
+
+    response = _authorize(client)
+
+    assert response.status_code == 302
+    returned = parse_qs(urlsplit(response.headers["location"]).query)
+    assert returned["error"] == ["access_denied"]
+    assert returned["state"] == ["state-123"]
+    assert "code" not in returned
+
+
+def test_userinfo_accepts_bearer_token_in_post_body() -> None:
+    client, _provider_value = _provider()
+    token_data = _issued_tokens(client)
+
+    userinfo = client.post(
+        "/oauth/userinfo",
+        data={"access_token": token_data["access_token"]},
+    )
+
+    assert userinfo.status_code == 200
+    assert userinfo.json()["sub"] == "user-1"
+    assert userinfo.json()["email"] == "alice@example.test"
+
+
+def test_userinfo_401_advertises_bearer_error_per_rfc6750() -> None:
+    client, _provider_value = _provider()
+
+    missing = client.get("/oauth/userinfo")
+    assert missing.status_code == 401
+    assert 'error="invalid_token"' in missing.headers["www-authenticate"]
+
+    malformed = client.get(
+        "/oauth/userinfo",
+        headers={"Authorization": "Bearer not-a-token"},
+    )
+    assert malformed.status_code == 401
+    assert 'error="invalid_token"' in malformed.headers["www-authenticate"]
