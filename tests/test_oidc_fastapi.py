@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
+import pytest
 from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.testclient import TestClient
 from joserfc import jwt
 from joserfc.jwk import KeySet
@@ -313,3 +315,273 @@ def test_generic_oidc_relying_party_can_complete_code_flow_from_discovery() -> N
     assert claims["nonce"] == "rp-nonce"
     assert userinfo["sub"] == claims["sub"]
     assert set(userinfo) <= set(discovery["claims_supported"])
+
+
+def test_unauthenticated_authorize_redirects_to_same_origin_login_not_json_401() -> (
+    None
+):
+    config = OIDCProviderConfig(
+        issuer="https://app.example.test",
+        authorization_endpoint="https://app.example.test/oauth/authorize",
+        token_endpoint="https://app.example.test/oauth/token",
+        jwks_uri="https://app.example.test/oauth/jwks",
+        userinfo_endpoint="https://app.example.test/oauth/userinfo",
+    )
+    provider = OIDCProvider(
+        config,
+        clients=(
+            OIDCClient(
+                client_id="app",
+                redirect_uris=("https://app.example.test/oidc/callback",),
+                scopes=("openid", "profile"),
+            ),
+        ),
+        signing_keys=MemorySigningKeyStore.generate(),
+    )
+
+    async def no_session(_request: Request):
+        return None
+
+    async def consent(_request: Request, _context: OIDCConsentContext):
+        return True
+
+    app = FastAPI()
+    app.include_router(
+        build_oidc_fastapi_plugin(
+            provider=provider,
+            hooks=OIDCProviderHooks(
+                get_session_user=no_session,
+                decide_consent=consent,
+                login_url="/login",
+            ),
+        )
+    )
+    client = TestClient(app, base_url="https://app.example.test")
+    verifier = "v" * 43
+    response = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "app",
+            "redirect_uri": "https://app.example.test/oidc/callback",
+            "scope": "openid profile",
+            "state": "app-state",
+            "nonce": "app-nonce",
+            "code_challenge": create_s256_code_challenge(verifier),
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    location = urlsplit(response.headers["location"])
+    assert location.path == "/login"
+    assert location.hostname in {None, "app.example.test"}
+    next_url = parse_qs(location.query)["next"][0]
+    assert next_url.startswith("/oauth/authorize")
+    assert "client_id=app" in next_url
+    assert "attacker" not in next_url
+    login_page = client.get("/login", follow_redirects=False)
+    assert login_page.status_code == 404
+
+
+def test_prompt_none_without_session_returns_to_the_client_not_login() -> None:
+    config = OIDCProviderConfig(
+        issuer="https://app.example.test",
+        authorization_endpoint="https://app.example.test/oauth/authorize",
+        token_endpoint="https://app.example.test/oauth/token",
+        jwks_uri="https://app.example.test/oauth/jwks",
+    )
+    provider = OIDCProvider(
+        config,
+        clients=(
+            OIDCClient(
+                client_id="app",
+                redirect_uris=("https://app.example.test/oidc/callback",),
+                scopes=("openid",),
+            ),
+        ),
+        signing_keys=MemorySigningKeyStore.generate(),
+    )
+
+    async def no_session(_request: Request):
+        return None
+
+    async def consent(_request: Request, _context: OIDCConsentContext):
+        return True
+
+    app = FastAPI()
+    app.include_router(
+        build_oidc_fastapi_plugin(
+            provider=provider,
+            hooks=OIDCProviderHooks(
+                get_session_user=no_session,
+                decide_consent=consent,
+                login_url="/login",
+            ),
+        )
+    )
+    client = TestClient(app, base_url="https://app.example.test")
+    response = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "app",
+            "redirect_uri": "https://app.example.test/oidc/callback",
+            "scope": "openid",
+            "state": "silent",
+            "nonce": "silent-nonce",
+            "prompt": "none",
+            "code_challenge": create_s256_code_challenge("v" * 43),
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    location = urlsplit(response.headers["location"])
+    assert location.path == "/oidc/callback"
+    returned = parse_qs(location.query)
+    assert returned["error"] == ["login_required"]
+    assert returned["state"] == ["silent"]
+
+
+def test_login_url_must_be_an_application_relative_path() -> None:
+    async def no_session(_request: Request):
+        return None
+
+    async def consent(_request: Request, _context: OIDCConsentContext):
+        return True
+
+    for login_url in (
+        "https://attacker.example/login",
+        "//attacker.example/login",
+        "login",
+        "",
+    ):
+        with pytest.raises(ValueError, match="application-relative"):
+            OIDCProviderHooks(
+                get_session_user=no_session,
+                decide_consent=consent,
+                login_url=login_url,
+            )
+
+
+def test_one_app_is_both_openid_provider_and_relying_party() -> None:
+    """Same process, same origin: OP routes + RP callback. No second server."""
+    user = _User()
+    session: dict[str, object] = {}
+    config = OIDCProviderConfig(
+        issuer="https://app.example.test",
+        authorization_endpoint="https://app.example.test/oauth/authorize",
+        token_endpoint="https://app.example.test/oauth/token",
+        jwks_uri="https://app.example.test/oauth/jwks",
+        userinfo_endpoint="https://app.example.test/oauth/userinfo",
+    )
+    provider = OIDCProvider(
+        config,
+        clients=(
+            OIDCClient(
+                client_id="app",
+                redirect_uris=("https://app.example.test/oidc/callback",),
+                scopes=("openid", "profile", "email"),
+            ),
+        ),
+        signing_keys=MemorySigningKeyStore.generate(),
+        users=OIDCUserAdapter(
+            claims=lambda _item, _scope: {
+                "sub": user.user_id,
+                "name": user.name,
+                "email": user.email,
+            },
+            authentication_time=lambda _item: int(user.authenticated_at.timestamp()),
+        ),
+    )
+
+    async def op_session(_request: Request):
+        return session.get("passkey_user")
+
+    async def consent(_request: Request, _context: OIDCConsentContext):
+        return True
+
+    app = FastAPI()
+    app.include_router(
+        build_oidc_fastapi_plugin(
+            provider=provider,
+            hooks=OIDCProviderHooks(
+                get_session_user=op_session,
+                decide_consent=consent,
+                login_url="/login",
+            ),
+        )
+    )
+
+    @app.get("/login")
+    def login(next: str = "/"):
+        session["passkey_user"] = user
+        return RedirectResponse(next, status_code=302)
+
+    @app.get("/oidc/callback")
+    def callback(code: str, state: str):
+        session["app_user_id"] = user.user_id
+        session["code"] = code
+        session["state"] = state
+        return RedirectResponse("/", status_code=302)
+
+    @app.get("/")
+    def home_page():
+        return {"user_id": session.get("app_user_id")}
+
+    client = TestClient(app, base_url="https://app.example.test")
+    verifier = "v" * 43
+    authorize = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "app",
+            "redirect_uri": "https://app.example.test/oidc/callback",
+            "scope": "openid profile email",
+            "state": "app-state",
+            "nonce": "app-nonce",
+            "code_challenge": create_s256_code_challenge(verifier),
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert authorize.status_code == 302
+    login_location = urlsplit(authorize.headers["location"])
+    assert login_location.path == "/login"
+    next_url = parse_qs(login_location.query)["next"][0]
+
+    after_login = client.get(
+        "/login", params={"next": next_url}, follow_redirects=False
+    )
+    assert after_login.status_code == 302
+    resumed = urlsplit(after_login.headers["location"])
+    assert resumed.path == "/oauth/authorize"
+
+    issued = client.get(after_login.headers["location"], follow_redirects=False)
+    assert issued.status_code == 302
+    callback_url = urlsplit(issued.headers["location"])
+    assert callback_url.path == "/oidc/callback"
+    returned = parse_qs(callback_url.query)
+    assert returned["state"] == ["app-state"]
+    code = returned["code"][0]
+
+    token = client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": "app",
+            "code": code,
+            "redirect_uri": "https://app.example.test/oidc/callback",
+            "code_verifier": verifier,
+        },
+    )
+    assert token.status_code == 200
+    assert "id_token" in token.json()
+    assert "refresh_token" not in token.json()
+
+    finished = client.get(issued.headers["location"], follow_redirects=False)
+    assert finished.status_code == 302
+    home = client.get("/")
+    assert home.json() == {"user_id": "user-1"}
+    assert session["state"] == "app-state"

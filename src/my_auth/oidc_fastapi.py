@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from time import time
 from typing import Any, Literal, TypeVar, cast
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from authlib.common.security import generate_token
 from authlib.consts import default_json_headers
@@ -33,7 +33,7 @@ from authlib.oidc.core import OpenIDCode, UserInfo
 from authlib.oidc.core.errors import LoginRequiredError
 from fastapi import APIRouter, Request, Response
 from joserfc.jwk import Key, KeySet, RSAKey
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 from .oidc import (
     AuthorizationCode,
@@ -66,6 +66,13 @@ class OIDCProviderHooks:
     get_session_user: Callable[[Request], MaybeAwaitable[object | None]]
     decide_consent: Callable[[Request, OIDCConsentContext], MaybeAwaitable[bool]]
     reauthenticate: Callable[[Request], MaybeAwaitable[object | None]] | None = None
+    login_url: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.login_url is None:
+            return
+        if not _same_origin_path(self.login_url):
+            raise ValueError("login_url must be an application-relative path")
 
 
 @dataclass(frozen=True, slots=True)
@@ -539,6 +546,10 @@ class OIDCProviderRouter:
                 end_user=session_user,
             )
             if session_user is None:
+                if _prompt_none(values):
+                    raise LoginRequiredError(redirect_uri=grant.redirect_uri)
+                if self.hooks.login_url:
+                    return _login_redirect(self.hooks.login_url, _return_to(request))
                 return _oauth_json_error("login_required", status_code=401)
             user = session_user
             if _requires_reauthentication(values):
@@ -664,6 +675,43 @@ def build_oidc_fastapi_plugin(
 def _requires_reauthentication(values: Mapping[str, list[str]]) -> bool:
     prompt = values.get("prompt", [""])[0]
     return "login" in prompt.split()
+
+
+def _prompt_none(values: Mapping[str, list[str]]) -> bool:
+    prompt = values.get("prompt", [""])[0]
+    return "none" in prompt.split()
+
+
+def _same_origin_path(value: str) -> bool:
+    if (
+        not isinstance(value, str)
+        or not value.startswith("/")
+        or value.startswith("//")
+    ):
+        return False
+    if "\\" in value or " " in value:
+        return False
+    parts = urlsplit(value)
+    return not parts.scheme and not parts.netloc and not parts.fragment
+
+
+def _return_to(request: Request) -> str:
+    path = request.url.path
+    query = str(request.url.query)
+    if not path.startswith("/") or path.startswith("//"):
+        return "/"
+    if query:
+        return f"{path}?{query}"
+    return path
+
+
+def _login_redirect(login_url: str, next_path: str) -> RedirectResponse:
+    parts = urlsplit(login_url)
+    existing = parse_qs(parts.query, keep_blank_values=True)
+    existing["next"] = [next_path]
+    query = urlencode(existing, doseq=True)
+    location = parts.path + (f"?{query}" if query else "")
+    return RedirectResponse(location, status_code=302)
 
 
 def _validate_max_age(

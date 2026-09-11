@@ -6,16 +6,22 @@ UserInfo. Passkeys stay behind that protocol. When the host outgrows this
 profile, it swaps the issuer URL — not the product domain, local `user_id`, or
 grants.
 
-This is not Keycloak, not a certified OP, and not a proxy for arbitrary identity
-workflows. The passkey core (`import my_auth`) stays usable without Authlib.
-The provider is the optional `my-auth[oidc]` extra.
+This is one FastAPI application, not a second process. The OP is
+`build_oidc_fastapi_plugin` on the same origin as `/login` and `/oidc/callback`.
+Unauthenticated authorize redirects to the host `login_url` with a same-origin
+`next` path; `prompt=none` still returns `login_required` to the client.
+No Keycloak, extra port, or extra server is required for the local profile.
+
+This is not a certified OP and not a proxy for arbitrary identity workflows.
+The passkey core (`import my_auth`) stays usable without Authlib. The provider
+is the optional `my-auth[oidc]` extra.
 
 ## Shipped profile
 
 | Surface | Support |
 |---|---|
 | Discovery | `/.well-known/openid-configuration` advertises only this profile |
-| Authorization | `response_type=code`; `openid` scope, `nonce`, and S256 PKCE required |
+| Authorization | `response_type=code`; `openid` scope, `nonce`, and S256 PKCE required. No session → same-origin `login_url` (optional). `prompt=none` → client `login_required` |
 | Token | `grant_type=authorization_code` only; one-time codes bound to client, redirect, subject, PKCE |
 | ID token | RS256, public JWKS, `kid`; never accept an ID token as an API access token |
 | UserInfo | Bearer access token; claims filtered by granted `openid` / `profile` / `email` |
@@ -68,11 +74,11 @@ Optional imports must not make the existing passkey core require an OIDC stack.
 
 ## Remaining proof (not extra protocol)
 
-The protocol slice above is implemented. What is still required for the product
-contract is one host that logs in only as a generic relying party against this
-issuer, then against another OP (for example Keycloak), with the same local
-`user_id` and grants. That proof lives in my-usermanager, not in growing this
-profile.
+The in-process profile is implemented: one app can be both OP and RP. What is
+still required for the product contract is a host that logs in only as a generic
+relying party against this issuer, then against another OP (for example
+Keycloak), with the same local `user_id` and grants. That proof lives in
+my-usermanager, not in growing this profile or adding a second server.
 
 Sources:
 - https://openid.net/specs/openid-connect-core-1_0.html

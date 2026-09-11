@@ -48,13 +48,14 @@ are not performed by `import my_auth`.
 
 ## Optional OIDC Provider
 
-The shipped OIDC profile is a minimal OpenID Provider backed by the host's
-already-authenticated passkey session. It supports public clients, exact HTTPS
-redirects, S256 PKCE, RS256 ID tokens, public JWKS, scoped UserInfo, short-lived
-one-time codes, and opaque bearer access tokens. Discovery advertises
-`claims_supported` and the implemented code+S256 surface so a generic relying
-party can pin this issuer and later swap it for another OpenID Provider. Refresh
-tokens, implicit/hybrid/password grants, dynamic registration, and logout
+The shipped OIDC profile is a minimal OpenID Provider in the same FastAPI app.
+Passkeys stay on `/login` behind authorize. The app is also the relying party at
+`/oidc/callback` on that origin. No second server is required. It supports public
+clients, exact HTTPS redirects, S256 PKCE, RS256 ID tokens, public JWKS, scoped
+UserInfo, short-lived one-time codes, and opaque bearer access tokens. Discovery
+advertises `claims_supported` and the implemented code+S256 surface so a generic
+relying party can pin this issuer and later swap it for another OpenID Provider.
+Refresh tokens, implicit/hybrid/password grants, dynamic registration, and logout
 extensions are not advertised or implemented by this profile.
 
 Install the optional adapter with `my-auth[oidc]` and configure a durable
@@ -71,28 +72,36 @@ from my_auth.oidc_fastapi import (
 
 provider = OIDCProvider(
     OIDCProviderConfig(
-        issuer="https://auth.example.test",
-        authorization_endpoint="https://auth.example.test/oauth/authorize",
-        token_endpoint="https://auth.example.test/oauth/token",
-        jwks_uri="https://auth.example.test/oauth/jwks",
-        userinfo_endpoint="https://auth.example.test/oauth/userinfo",
+        issuer="https://app.example.test",
+        authorization_endpoint="https://app.example.test/oauth/authorize",
+        token_endpoint="https://app.example.test/oauth/token",
+        jwks_uri="https://app.example.test/oauth/jwks",
+        userinfo_endpoint="https://app.example.test/oauth/userinfo",
     ),
     clients=(
         OIDCClient(
             client_id="product",
-            redirect_uris=("https://product.example.test/oidc/callback",),
+            redirect_uris=("https://app.example.test/oidc/callback",),
             scopes=("openid", "profile", "email"),
         ),
     ),
     signing_keys=MemorySigningKeyStore.generate(),
 )
+hooks = OIDCProviderHooks(
+    get_session_user=get_session_user,
+    decide_consent=decide_consent,
+    login_url="/login",
+)
 app.include_router(build_oidc_fastapi_plugin(provider=provider, hooks=hooks))
 ```
 
-`OIDCProviderHooks.get_session_user` and `decide_consent` remain host policy
-seams. The host must also map stable local subjects and claims through
-`OIDCUserAdapter`, enforce disabled-account behavior, and protect the provider
-with its deployment/session controls. See
+`OIDCProviderHooks.get_session_user`, `decide_consent`, and optional `login_url`
+remain host policy seams. `login_url` must be an application-relative path on
+this origin; unauthenticated authorize redirects there with `next` pointing back
+at `/oauth/authorize`. The host maps stable local subjects and claims through
+`OIDCUserAdapter`, owns `/oidc/callback` as the relying party, enforces
+disabled-account behavior, and protects the provider with its deployment/session
+controls. See
 [`docs/oidc-provider.md`](docs/oidc-provider.md) for the support matrix and
 conformance gates; passing the included integration tests is not certification.
 

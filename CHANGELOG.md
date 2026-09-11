@@ -7,6 +7,10 @@ The tested cross-library pins live only in the
 
 ## Unreleased
 
+- One FastAPI app is both the minimal OpenID Provider and the relying party:
+  unauthenticated authorize redirects to a same-origin `login_url` with `next`;
+  `prompt=none` still returns `login_required` to the client. No second server.
+
 - State the product identity as a minimal, pluggable OpenID Provider: a generic
   relying party pins discovery/authorize/token/JWKS/UserInfo and can later swap
   the issuer. Refresh tokens, logout extensions, and OpenID Foundation

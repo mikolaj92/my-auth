@@ -39,6 +39,9 @@ def test_docs_present_my_auth_as_a_minimal_pluggable_openid_provider() -> None:
     assert "minimal OpenID Provider" in decision
     assert "generic relying party" in folded_readme
     assert "swap" in folded_readme
+    assert "no second server" in folded_readme
+    assert "same fastapi app" in folded_readme
+    assert "login_url" in folded_readme
     assert (
         "authorization-code + s256 pkce" in folded_decision
         or "authorization code + s256 pkce" in folded_decision
