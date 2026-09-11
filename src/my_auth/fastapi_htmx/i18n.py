@@ -10,10 +10,7 @@ _COPY: dict[str, dict[str, str]] = {
         "login_page_title": "Sign in with a passkey",
         "login_eyebrow": "Passkey sign in",
         "login_heading": "Sign in without a password",
-        "login_description": (
-            "Use your device passkey prompt to continue. "
-            "This page keeps WebAuthn API responses as JSON."
-        ),
+        "login_description": "Use your device passkey prompt to continue.",
         "login_submit": "Continue with passkey",
         "login_username_label": "Username (optional)",
         "login_hybrid": "Sign in with a phone (QR code)",
@@ -87,8 +84,7 @@ _COPY: dict[str, dict[str, str]] = {
         "login_eyebrow": "Logowanie kluczem",
         "login_heading": "Zaloguj się bez hasła",
         "login_description": (
-            "Użyj monitu klucza dostępu na urządzeniu, aby kontynuować. "
-            "Ta strona zwraca odpowiedzi API WebAuthn jako JSON."
+            "Użyj monitu klucza dostępu na urządzeniu, aby kontynuować."
         ),
         "login_submit": "Kontynuuj z kluczem dostępu",
         "login_username_label": "Nazwa użytkownika (opcjonalnie)",
@@ -159,8 +155,7 @@ _COPY: dict[str, dict[str, str]] = {
         "login_eyebrow": "Passkey-Anmeldung",
         "login_heading": "Ohne Passwort anmelden",
         "login_description": (
-            "Nutzen Sie die Passkey-Aufforderung Ihres Geräts, um fortzufahren. "
-            "Diese Seite liefert WebAuthn-API-Antworten als JSON."
+            "Nutzen Sie die Passkey-Aufforderung Ihres Geräts, um fortzufahren."
         ),
         "login_submit": "Mit Passkey fortfahren",
         "login_username_label": "Benutzername (optional)",

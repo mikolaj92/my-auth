@@ -5,6 +5,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, TypeVar
+from urllib.parse import urlsplit
 
 from app_factory.jinja import configure_jinja_env
 from fastapi import Request
@@ -90,7 +91,7 @@ class PasskeyTemplateRenderer:
             passkey_css_url=f"{static_base}/passkey-ui.css",
             csrf_header_name=self.config.csrf_header_name,
             csrf_token=csrf_token,
-            login_success_url=self.config.login_success_url,
+            login_success_url=_login_success_url(request, self.config),
             register_success_url=success_url,
             registration_kind=registration_kind,
             capability=capability if capability_valid else None,
@@ -136,6 +137,28 @@ class PasskeyTemplateRenderer:
                 path="/",
             )
         return response
+
+
+def _login_success_url(request: Request, config: PasskeyUiConfig) -> str | None:
+    requested = _same_origin_return_path(request.query_params.get("next"))
+    if requested is not None:
+        return requested
+    return config.login_success_url
+
+
+def _same_origin_return_path(value: str | None) -> str | None:
+    if (
+        not isinstance(value, str)
+        or not value.startswith("/")
+        or value.startswith("//")
+        or "\\" in value
+        or " " in value
+    ):
+        return None
+    parts = urlsplit(value)
+    if parts.scheme or parts.netloc or parts.fragment:
+        return None
+    return value
 
 
 def _resolve_locale(request: Request, config: PasskeyUiConfig) -> str:

@@ -7,6 +7,10 @@ The tested cross-library pins live only in the
 
 ## Unreleased
 
+- After a passkey, login returns to a same-origin `next` from authorize
+  (`/oauth/authorize?...`). Off-origin `next` values are ignored. The page no
+  longer mentions JSON API responses.
+
 - Prove the advertised OpenID profile at the HTTP seam: ID tokens carry `iat`,
   `auth_time`, and `at_hash`; confidential clients redeem codes with
   `client_secret_basic`; consent denial returns `access_denied` to the client;

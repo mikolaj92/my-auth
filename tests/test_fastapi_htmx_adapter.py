@@ -7,6 +7,7 @@ import subprocess
 import sys
 import textwrap
 import tomllib
+from html import unescape
 from importlib.resources import files
 from pathlib import Path
 
@@ -627,10 +628,32 @@ def test_login_locale_switches_copy_and_sets_cookie() -> None:
     assert "Ohne Passwort anmelden" in cookied_de.text
 
 
+def test_login_returns_to_same_origin_next_after_passkey() -> None:
+    app, _, _ = _app()
+    client = TestClient(app)
+    authorize = (
+        "/oauth/authorize?response_type=code&client_id=app"
+        "&redirect_uri=https://app.example.test/oidc/callback"
+        "&scope=openid&state=app-state&nonce=app-nonce"
+        "&code_challenge=challenge&code_challenge_method=S256"
+    )
+
+    page = client.get("/login", params={"next": authorize})
+
+    assert page.status_code == 200
+    assert f'data-success-url="{authorize}"' in unescape(page.text)
+    assert "WebAuthn API responses" not in page.text
+    ignored = client.get(
+        "/login",
+        params={"next": "https://attacker.example/callback"},
+    )
+    assert "attacker" not in ignored.text
+    assert 'data-success-url="https://attacker.example/callback"' not in ignored.text
+
+
 def test_login_conditional_ui_has_visible_autofill_field_and_can_be_disabled() -> None:
     assert PasskeyUiConfig().conditional_ui is False
-    app, platform, _ = _app()
-    client = TestClient(app)
+    _, platform, _ = _app()
     enabled_app = FastAPI()
     enabled_platform = AppFactoryUi(
         "/static/platform", "app-factory-platform", "/static/platform"
