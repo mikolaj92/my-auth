@@ -56,22 +56,29 @@ def test_package_reports_neutral_05x_line() -> None:
     assert f"blob/{app_factory_tag}/COMPAT.md" in readme
 
 
-def test_changelog_unreleased_is_only_work_after_the_pinned_tag() -> None:
+def test_changelog_current_tag_absorbs_post_055_work() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     version = project["project"]["version"]
     headings = re.findall(r"^## (.+)$", changelog, flags=re.MULTILINE)
 
+    assert version == "0.5.6"
     assert headings[0] == "Unreleased"
     assert headings[1] == version
+    assert headings[2] == "0.5.5"
     assert headings == ["Unreleased"] + sorted(
-        headings[1:], key=lambda item: tuple(int(part) for part in item.split(".")), reverse=True
+        headings[1:],
+        key=lambda item: tuple(int(part) for part in item.split(".")),
+        reverse=True,
     )
 
-    unreleased_body = changelog.split("## Unreleased", 1)[1].split(f"## {version}", 1)[0]
+    unreleased_body = changelog.split("## Unreleased", 1)[1].split(f"## {version}", 1)[
+        0
+    ]
     tagged_body = changelog.split(f"## {version}", 1)[1].split("## ", 1)[0]
+    previous_body = changelog.split("## 0.5.5", 1)[1].split("## ", 1)[0]
 
-    already_in_tag = (
+    already_in_055 = (
         "(#103)",
         "(#95)",
         "(#96)",
@@ -81,43 +88,49 @@ def test_changelog_unreleased_is_only_work_after_the_pinned_tag() -> None:
         "(#109)",
         "(#111)",
     )
-    after_tag = ("(#105)", "(#107)", "(#108)", "(#113)", "(#114)")
-    for marker in already_in_tag:
-        assert marker not in unreleased_body, marker
+    absorbed = ("(#105)", "(#107)", "(#108)", "(#113)")
+    assert unreleased_body.strip() == ""
+    assert "still reports" not in changelog
+    assert "(#114)" not in changelog
+    for marker in absorbed:
         assert marker in tagged_body, marker
-    for marker in after_tag:
-        assert marker in unreleased_body, marker
+        assert marker not in unreleased_body, marker
+        assert marker not in previous_body, marker
+    for marker in already_in_055:
+        assert marker in previous_body, marker
         assert marker not in tagged_body, marker
-    assert "still reports" in unreleased_body
-    assert version in unreleased_body
 
 
-def test_readme_marks_post_pin_passkey_api_as_unreleased() -> None:
+def test_optional_extras_keep_oidc_canonical_and_one_dev_group() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    extras = project["project"]["optional-dependencies"]
+    groups = project["dependency-groups"]
+
+    assert extras["fastapi"] == extras["oidc"]
+    assert "dev" not in extras
+    assert groups["dev"]
+    assert "fastapi-htmx" in extras
+    assert "browser" in extras
+    assert "oidc" in extras
+
+
+def test_readme_documents_current_tag_passkey_api() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     version = project["project"]["version"]
     pin = f"v{version}"
-    marker = f"Unreleased after the pinned `{pin}` tag"
-    post_pin = (
+    current = (
         "`PasskeyRouteHooks.rate_limit`",
         "`PASSKEY_ORIGINS`",
         "`PasskeyUiConfig(conditional_ui=True)`",
     )
 
     assert f"git+https://github.com/mikolaj92/my-auth.git@{pin}" in readme
+    assert "Unreleased after the pinned" not in readme
     install = readme.split("## Optional OIDC Provider", 1)[0]
-    folded_install = " ".join(install.split())
-    assert marker in install
-    assert "are not in that tag" in folded_install
-    paragraphs = [part.strip() for part in readme.split("\n\n") if part.strip()]
-    for symbol in post_pin:
-        matching = [part for part in paragraphs if symbol in part]
-        assert matching, f"{symbol} missing from README"
+    for symbol in current:
+        assert symbol in readme
         assert symbol in install
-        for part in matching:
-            assert marker in part, (
-                f"{symbol} described without {marker!r}: {part[:180]!r}"
-            )
 
 
 def test_fastapi_settings_accept_canonical_origin_allowlist_and_legacy_alias() -> None:

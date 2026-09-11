@@ -546,7 +546,7 @@ wheels = [
 
 [[package]]
 name = "my-auth"
-version = "0.5.5"
+version = "0.5.6"
 source = { editable = "." }
 dependencies = [
     { name = "typing-extensions" },
@@ -556,17 +556,6 @@ dependencies = [
 [package.optional-dependencies]
 browser = [
     { name = "playwright" },
-]
-dev = [
-    { name = "app-factory", extra = ["fastapi"] },
-    { name = "authlib" },
-    { name = "basedpyright" },
-    { name = "fastapi" },
-    { name = "httpx2" },
-    { name = "jinja2" },
-    { name = "joserfc" },
-    { name = "pytest" },
-    { name = "ruff" },
 ]
 fastapi = [
     { name = "authlib" },
@@ -599,29 +588,20 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "app-factory", extras = ["fastapi"], marker = "extra == 'dev'", git = "https://github.com/mikolaj92/app-factory?tag=v0.6.22" },
     { name = "app-factory", extras = ["fastapi"], marker = "extra == 'fastapi-htmx'", git = "https://github.com/mikolaj92/app-factory?tag=v0.6.22" },
-    { name = "authlib", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "authlib", marker = "extra == 'fastapi'", specifier = ">=1.8.0" },
     { name = "authlib", marker = "extra == 'oidc'", specifier = ">=1.8.0" },
-    { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.21" },
-    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.141.1" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.141.1" },
     { name = "fastapi", marker = "extra == 'fastapi-htmx'", specifier = ">=0.141.1" },
     { name = "fastapi", marker = "extra == 'oidc'", specifier = ">=0.141.1" },
-    { name = "httpx2", marker = "extra == 'dev'", specifier = ">=2.12.0" },
-    { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1" },
     { name = "jinja2", marker = "extra == 'fastapi-htmx'", specifier = ">=3.1" },
-    { name = "joserfc", marker = "extra == 'dev'", specifier = ">=1.7.5" },
     { name = "joserfc", marker = "extra == 'fastapi'", specifier = ">=1.7.5" },
     { name = "joserfc", marker = "extra == 'oidc'", specifier = ">=1.7.5" },
     { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.62" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "typing-extensions", specifier = ">=4.12" },
     { name = "webauthn", specifier = ">=3,<4" },
 ]
-provides-extras = ["fastapi", "fastapi-htmx", "oidc", "dev", "browser"]
+provides-extras = ["fastapi", "fastapi-htmx", "oidc", "browser"]
 
 [package.metadata.requires-dev]
 dev = [

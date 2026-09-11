@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "my-auth"
-version = "0.5.5"
+version = "0.5.6"
 description = "Minimal OpenID Provider with passkey login for Python web apps"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,17 +26,6 @@ oidc = [
   "authlib>=1.8.0",
   "fastapi>=0.141.1",
   "joserfc>=1.7.5",
-]
-dev = [
-  "app-factory[fastapi]>=0.6.22",
-  "authlib>=1.8.0",
-  "basedpyright>=1.21",
-  "fastapi>=0.141.1",
-  "httpx2>=2.12.0",
-  "jinja2>=3.1",
-  "joserfc>=1.7.5",
-  "pytest>=8",
-  "ruff>=0.8",
 ]
 browser = [
   "playwright>=1.62",

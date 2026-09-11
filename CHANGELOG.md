@@ -7,38 +7,34 @@ The tested cross-library pins live only in the
 
 ## Unreleased
 
+## 0.5.6
+
 - After a passkey, login returns to a same-origin `next` from authorize
   (`/oauth/authorize?...`). Off-origin `next` values are ignored. The page no
   longer mentions JSON API responses.
-
 - Prove the advertised OpenID profile at the HTTP seam: ID tokens carry `iat`,
   `auth_time`, and `at_hash`; confidential clients redeem codes with
   `client_secret_basic`; consent denial returns `access_denied` to the client;
   token responses send `Cache-Control: no-store`; UserInfo accepts a Bearer
   token in the POST body; 401 UserInfo advertises RFC 6750
   `WWW-Authenticate: Bearer error="..."`.
-
 - One FastAPI app is both the minimal OpenID Provider and the relying party:
   unauthenticated authorize redirects to a same-origin `login_url` with `next`;
   `prompt=none` still returns `login_required` to the client. No second server.
-
 - State the product identity as a minimal, pluggable OpenID Provider: a generic
   relying party pins discovery/authorize/token/JWKS/UserInfo and can later swap
   the issuer. Refresh tokens, logout extensions, and OpenID Foundation
   certification stay out of this profile, not as unfinished protocol work.
-
 - Advertise OpenID Discovery fields required by a generic relying party:
   `claims_supported`, `claim_types_supported`, and explicit
   `request_parameter_supported` / `request_uri_parameter_supported` false.
   A standard RP can complete authorization-code + S256 PKCE from discovery,
   JWKS, token, and UserInfo without my-auth-specific endpoints.
-
 - Add opt-in WebAuthn Conditional UI/autofill on the login page with a visible
   `autocomplete="username webauthn"` field. Conditional mediation is feature-
   detected; manual and hybrid login remain available, and pending prompts are
   cancelled on manual login, HTMX replacement, and view removal (#105). The
   feature is disabled by default for existing hosts.
-
 - Accept an explicit multi-origin WebAuthn allowlist through canonical
   `PasskeyConfig.origins` / `PASSKEY_ORIGINS`, while retaining the legacy
   single-origin constructor and environment aliases. Registration and
@@ -50,13 +46,10 @@ The tested cross-library pins live only in the
   retain ownership of keys, proxy trust, storage, and fail-closed policy (#108).
 - Document the current SQLite schema version as `3`, matching
   `CURRENT_SCHEMA_VERSION` and `inspect_sqlite_schema().version` (#113).
-- Mark `PasskeyRouteHooks.rate_limit`, `PASSKEY_ORIGINS`, and Conditional UI as
-  unreleased after the pinned `v0.5.5` install tag (#114).
+- Keep `fastapi` as a compatibility extra identical to canonical `oidc`; drop
+  the duplicate `dev` extra in favor of `[dependency-groups] dev` (#117, #119).
 - Drop the npm Playwright toolchain; browser coverage uses the uv
   `playwright` extra.
-
-`pyproject.toml` still reports `0.5.5` to match the pinned install tag. This
-tree is not that tag.
 
 ## 0.5.5
 
