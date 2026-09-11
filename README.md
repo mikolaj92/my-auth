@@ -33,11 +33,11 @@ The OpenID Provider extra is `my-auth[oidc]`; `my-auth[fastapi]` remains an
 identical compatibility alias. `PasskeyRouteHooks.rate_limit`,
 `PASSKEY_ORIGINS`, and `PasskeyUiConfig(conditional_ui=True)` are in this tag.
 
-This repository uses app-factory tag `v0.6.22` to test the optional HTMX
+This repository uses app-factory tag `v0.7.2` to test the optional HTMX
 adapter. It is a library, not a production host using `app-factory[platform]`,
-so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.6.22/COMPAT.md)
+so the [platform host compatibility matrix](https://github.com/mikolaj92/app-factory/blob/v0.7.2/COMPAT.md)
 does not define this package's version. The published `fastapi-htmx` extra
-requires the compatible `app-factory>=0.6.22` generation.
+requires the compatible `app-factory>=0.7.2` generation.
 
 The core import is `my_auth`. The FastAPI router is explicitly imported from
 `my_auth.fastapi`; the server-rendered UI is explicitly imported from

@@ -7,6 +7,8 @@ The tested cross-library pins live only in the
 
 ## Unreleased
 
+- Align the nested app-factory source with `v0.7.2`.
+
 ## 0.5.6
 
 - After a passkey, login returns to a same-origin `next` from authorize

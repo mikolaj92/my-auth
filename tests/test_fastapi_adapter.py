@@ -89,7 +89,7 @@ def test_changelog_current_tag_absorbs_post_055_work() -> None:
         "(#111)",
     )
     absorbed = ("(#105)", "(#107)", "(#108)", "(#113)")
-    assert unreleased_body.strip() == ""
+    assert "v0.7.2" in unreleased_body
     assert "still reports" not in changelog
     assert "(#114)" not in changelog
     for marker in absorbed:
