@@ -72,13 +72,12 @@ Use Authlib's authorization-server/OIDC grants and maintained JOSE primitives;
 do not implement cryptography or fork protocol validation into product apps.
 Optional imports must not make the existing passkey core require an OIDC stack.
 
-## Remaining proof (not extra protocol)
+## Later swap (not extra protocol)
 
-The in-process profile is implemented: one app can be both OP and RP. What is
-still required for the product contract is a host that logs in only as a generic
-relying party against this issuer, then against another OP (for example
-Keycloak), with the same local `user_id` and grants. That proof lives in
-my-usermanager, not in growing this profile or adding a second server.
+The in-process profile is implemented: one app can be both OP and RP. A later
+bigger OpenID Provider is an issuer URL change plus an explicit `(issuer, sub)`
+link in my-usermanager. That proof does not require Keycloak, Docker, or a
+second process. Hosts keep product routes free of `my_auth` / passkey SDK types.
 
 Sources:
 - https://openid.net/specs/openid-connect-core-1_0.html
