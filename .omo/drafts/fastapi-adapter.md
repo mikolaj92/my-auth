@@ -24,12 +24,12 @@ execution plan at `.omo/plans/fastapi-adapter.md`.
 
 Files inspected:
 
-- `/Users/mini-m4-main/Developer/my-auth/pyproject.toml`
-- `/Users/mini-m4-main/Developer/my-auth/src/my_auth/__init__.py`
-- `/Users/mini-m4-main/Developer/my-auth/src/my_auth/passkeys.py`
-- `/Users/mini-m4-main/Developer/my-auth/src/my_auth/static/passkey.js`
-- `/Users/mini-m4-main/Developer/my-auth/tests/test_passkeys.py`
-- `/Users/mini-m4-main/Developer/my-auth/README.md`
+- `/Users/mini-m4-0/Developer/my-auth/pyproject.toml`
+- `/Users/mini-m4-0/Developer/my-auth/src/my_auth/__init__.py`
+- `/Users/mini-m4-0/Developer/my-auth/src/my_auth/passkeys.py`
+- `/Users/mini-m4-0/Developer/my-auth/src/my_auth/static/passkey.js`
+- `/Users/mini-m4-0/Developer/my-auth/tests/test_passkeys.py`
+- `/Users/mini-m4-0/Developer/my-auth/README.md`
 
 Current reusable core already owns:
 
@@ -51,7 +51,7 @@ integration strips legacy `response.userHandle` before delegating to `my-auth`.
 
 Primary file inspected:
 
-- `/Users/mini-m4-main/Developer/hermes-repos/msds-portal/control-plane/src/control_plane/web/auth_routes.py`
+- `/Users/mini-m4-0/Developer/hermes-repos/msds-portal/control-plane/src/control_plane/web/auth_routes.py`
 
 Verified shared route contract:
 
@@ -86,21 +86,21 @@ Security lessons from the verified integration:
 
 Files inspected:
 
-- `/Users/mini-m4-main/Developer/rnkstr/requirements.txt`
-- `/Users/mini-m4-main/Developer/rnkstr/README.md`
-- `/Users/mini-m4-main/Developer/rnkstr/app/main.py`
-- `/Users/mini-m4-main/Developer/rnkstr/app/auth.py`
-- `/Users/mini-m4-main/Developer/rnkstr/app/auth_router.py`
-- `/Users/mini-m4-main/Developer/rnkstr/app/database.py`
-- `/Users/mini-m4-main/Developer/rnkstr/app/config.py`
-- `/Users/mini-m4-main/Developer/rnkstr/app/admin.py`
-- `/Users/mini-m4-main/Developer/rnkstr/app/users.py`
-- `/Users/mini-m4-main/Developer/rnkstr/app/auth_test.py`
-- `/Users/mini-m4-main/Developer/rnkstr/templates/base.html`
-- `/Users/mini-m4-main/Developer/rnkstr/templates/components/sidebar.html`
-- `/Users/mini-m4-main/Developer/rnkstr/templates/components/navigation.html`
-- `/Users/mini-m4-main/Developer/rnkstr/tests/conftest.py`
-- `/Users/mini-m4-main/Developer/rnkstr/tests/backend/test_main.py`
+- `/Users/mini-m4-0/Developer/rnkstr/requirements.txt`
+- `/Users/mini-m4-0/Developer/rnkstr/README.md`
+- `/Users/mini-m4-0/Developer/rnkstr/app/main.py`
+- `/Users/mini-m4-0/Developer/rnkstr/app/auth.py`
+- `/Users/mini-m4-0/Developer/rnkstr/app/auth_router.py`
+- `/Users/mini-m4-0/Developer/rnkstr/app/database.py`
+- `/Users/mini-m4-0/Developer/rnkstr/app/config.py`
+- `/Users/mini-m4-0/Developer/rnkstr/app/admin.py`
+- `/Users/mini-m4-0/Developer/rnkstr/app/users.py`
+- `/Users/mini-m4-0/Developer/rnkstr/app/auth_test.py`
+- `/Users/mini-m4-0/Developer/rnkstr/templates/base.html`
+- `/Users/mini-m4-0/Developer/rnkstr/templates/components/sidebar.html`
+- `/Users/mini-m4-0/Developer/rnkstr/templates/components/navigation.html`
+- `/Users/mini-m4-0/Developer/rnkstr/tests/conftest.py`
+- `/Users/mini-m4-0/Developer/rnkstr/tests/backend/test_main.py`
 
 Findings:
 
@@ -131,18 +131,18 @@ Findings:
 
 Files inspected:
 
-- `/Users/mini-m4-main/Developer/wolnyrolnik/AGENTS.md`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/pyproject.toml`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/src/auth.py`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/src/main.py`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/src/database.py`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/sql/schema.sql`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/sql/migrations/`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/sql/queries/`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/src/models.py`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/src/templates/base.html`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/src/templates/farmer_profile.html`
-- `/Users/mini-m4-main/Developer/wolnyrolnik/tests/test_smoke.py`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/AGENTS.md`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/pyproject.toml`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/src/auth.py`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/src/main.py`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/src/database.py`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/sql/schema.sql`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/sql/migrations/`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/sql/queries/`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/src/models.py`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/src/templates/base.html`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/src/templates/farmer_profile.html`
+- `/Users/mini-m4-0/Developer/wolnyrolnik/tests/test_smoke.py`
 
 Findings:
 

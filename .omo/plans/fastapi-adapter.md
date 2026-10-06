@@ -404,7 +404,7 @@ Update `README.md`:
 
 ### Wave 4 — verification
 
-Run in `/Users/mini-m4-main/Developer/my-auth`:
+Run in `/Users/mini-m4-0/Developer/my-auth`:
 
 ```bash
 uv run pytest
