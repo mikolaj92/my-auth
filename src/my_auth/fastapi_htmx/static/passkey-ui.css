@@ -31,12 +31,10 @@ body.passkey-ui .passkey-shell,
 }
 
 /*
- * Login/register under app-factory shell: force a full-bleed column so the
- * sticky top bar spans the viewport (not a short centered strip).
+ * Standalone ceremonies mark their main content with passkey-content.
+ * Embedded account panels keep the product shell and its sidebar geometry.
  */
-body.app-shell > .app-main,
-body.app-shell .app-main:has(.passkey-card),
-.app-main:has(> .app-main-header):has(.passkey-card) {
+.app-main:has(> .app-main-content > .passkey-content) {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -48,8 +46,7 @@ body.app-shell .app-main:has(.passkey-card),
   margin: 0;
 }
 
-body.app-shell .app-main > .app-main-header,
-.app-main:has(> .app-main-header):has(.passkey-card) > .app-main-header {
+.app-main:has(> .app-main-content > .passkey-content) > .app-main-header {
   box-sizing: border-box;
   width: 100%;
   max-width: none;
@@ -57,8 +54,7 @@ body.app-shell .app-main > .app-main-header,
   align-self: stretch;
 }
 
-body.app-shell .app-main > .app-main-content,
-.app-main:has(> .app-main-header):has(.passkey-card) > .app-main-content {
+.app-main:has(> .app-main-content > .passkey-content) > .app-main-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -69,8 +65,6 @@ body.app-shell .app-main > .app-main-content,
   max-width: none;
 }
 
-body.app-shell .app-main #main-content,
-.app-main:has(> .app-main-header):has(.passkey-card) #main-content,
 .passkey-content {
   display: flex;
   flex: 1 1 auto;
