@@ -82,7 +82,7 @@ def test_external_guarded_delete_serializes_before_count(tmp_path: Path) -> None
     release_first = Event()
     first_result: list[bool] = []
     second_result: list[bool] = []
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def delete_first() -> None:
         try:
@@ -96,7 +96,7 @@ def test_external_guarded_delete_serializes_before_count(tmp_path: Path) -> None
             first_finished.set()
             assert release_first.wait(5)
             first_connection.commit()
-        except BaseException as error:
+        except (sqlite3.Error, AssertionError) as error:
             errors.append(error)
 
     def delete_second() -> None:
@@ -116,7 +116,7 @@ def test_external_guarded_delete_serializes_before_count(tmp_path: Path) -> None
                 errors.append(error)
             second_connection.rollback()
             second_result.append(False)
-        except BaseException as error:
+        except (sqlite3.Error, AssertionError) as error:
             errors.append(error)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
