@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from authlib.oidc.core.grants.util import create_half_hash
+from authlib.oidc.core.util import create_half_hash
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.testclient import TestClient
@@ -619,14 +619,18 @@ def test_id_token_includes_iat_auth_time_and_at_hash() -> None:
     client, _provider_value = _provider()
     token_data = _issued_tokens(client)
     public_keys = KeySet.import_key_set(client.get("/oauth/jwks").json())
-    decoded = jwt.decode(token_data["id_token"], public_keys, algorithms=["RS256"])
+    id_token = token_data["id_token"]
+    assert isinstance(id_token, str)
+    decoded = jwt.decode(id_token, public_keys, algorithms=["RS256"])
     now = int(datetime.now(UTC).timestamp())
 
     assert decoded.claims["iat"] <= now <= decoded.claims["exp"]
     assert decoded.claims["auth_time"] == int(_User.authenticated_at.timestamp())
-    assert decoded.claims["at_hash"] == create_half_hash(
-        token_data["access_token"], "RS256"
-    ).decode("ascii")
+    access_token = token_data["access_token"]
+    assert isinstance(access_token, str)
+    half_hash = create_half_hash(access_token, "RS256")
+    assert half_hash is not None
+    assert decoded.claims["at_hash"] == half_hash.decode("ascii")
 
 
 def test_token_response_is_not_stored_by_intermediaries() -> None:
@@ -710,9 +714,11 @@ def test_userinfo_accepts_bearer_token_in_post_body() -> None:
     client, _provider_value = _provider()
     token_data = _issued_tokens(client)
 
+    access_token = token_data["access_token"]
+    assert isinstance(access_token, str)
     userinfo = client.post(
         "/oauth/userinfo",
-        data={"access_token": token_data["access_token"]},
+        data={"access_token": access_token},
     )
 
     assert userinfo.status_code == 200
