@@ -82,22 +82,19 @@ def test_external_guarded_delete_serializes_before_count(tmp_path: Path) -> None
     release_first = Event()
     first_result: list[bool] = []
     second_result: list[bool] = []
-    errors: list[BaseException] = []
+    errors: list[sqlite3.OperationalError] = []
 
     def delete_first() -> None:
-        try:
-            first_result.append(
-                first_store.delete_credential(
-                    first.credential.credential_id,
-                    user_id=user.user_id,
-                    require_remaining=True,
-                )
+        first_result.append(
+            first_store.delete_credential(
+                first.credential.credential_id,
+                user_id=user.user_id,
+                require_remaining=True,
             )
-            first_finished.set()
-            assert release_first.wait(5)
-            first_connection.commit()
-        except BaseException as error:
-            errors.append(error)
+        )
+        first_finished.set()
+        assert release_first.wait(5)
+        first_connection.commit()
 
     def delete_second() -> None:
         try:
@@ -116,8 +113,6 @@ def test_external_guarded_delete_serializes_before_count(tmp_path: Path) -> None
                 errors.append(error)
             second_connection.rollback()
             second_result.append(False)
-        except BaseException as error:
-            errors.append(error)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         first_future = executor.submit(delete_first)
