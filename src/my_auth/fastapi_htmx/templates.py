@@ -31,7 +31,13 @@ class PasskeyTemplateRenderer:
         return await self._render("login.html", request)
 
     async def render_register(self, request: Request) -> Response:
-        return await self._render("register.html", request)
+        anonymous_bootstrap = (
+            self.get_session_user is not None
+            and await _maybe_await(self.get_session_user(request)) is None
+        )
+        return await self._render(
+            "register.html", request, anonymous_bootstrap=anonymous_bootstrap
+        )
 
     async def render_credential_management(
         self, request: Request, *, credentials: Sequence[PasskeyCredential]
@@ -68,6 +74,7 @@ class PasskeyTemplateRenderer:
         registration_kind: Literal["invitation", "recovery"] | None = None,
         capability: str | None = None,
         credentials: list[PasskeyCredential] | None = None,
+        anonymous_bootstrap: bool = False,
     ) -> str:
         static_base = self.config.static_url_path.rstrip("/")
         csrf_token = await _maybe_await(self.config.csrf_token(request))
@@ -99,11 +106,7 @@ class PasskeyTemplateRenderer:
             capability=capability if capability_valid else None,
             capability_valid=capability_valid,
             credentials=credentials or [],
-            bootstrap=(
-                await _maybe_await(self.get_session_user(request)) is None
-                if template_name == "register.html" and self.get_session_user is not None
-                else False
-            ),
+            anonymous_bootstrap=anonymous_bootstrap,
             login_error_target_id=self.config.login_error_target_id,
             register_error_target_id=self.config.register_error_target_id,
             conditional_ui=self.config.conditional_ui,
@@ -124,6 +127,7 @@ class PasskeyTemplateRenderer:
         registration_kind: Literal["invitation", "recovery"] | None = None,
         capability: str | None = None,
         credentials: list[PasskeyCredential] | None = None,
+        anonymous_bootstrap: bool = False,
     ) -> Response:
         content = await self._render_content(
             template_name,
@@ -131,6 +135,7 @@ class PasskeyTemplateRenderer:
             registration_kind=registration_kind,
             capability=capability,
             credentials=credentials,
+            anonymous_bootstrap=anonymous_bootstrap,
         )
         lang = _resolve_locale(request, self.config)
         response = HTMLResponse(content)

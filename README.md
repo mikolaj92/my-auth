@@ -21,15 +21,11 @@ user models, or audit policy.
 
 ## Shared presentation
 
-Passkey panels use Basecoat components and app-factory's bundled Lism layout
-primitives (`l--center`, `l--stack`). The factory serves the pinned stylesheet
-same-origin; this package does not copy it or ship a separate layout engine.
-Keep theme/header shell glue separate from panel layout and use existing
-primitives instead of adding handwritten flex/grid containers.
-
-Login and anonymous bootstrap registration use `body_class` marker `my-auth-standalone`.
-Preserve `super()` in overrides; independent host logins must add the marker.
-CSS imports and embedded cards never enable standalone layout.
+Passkey panels use Basecoat and app-factory's bundled Lism (`l--center`, `l--stack`), served pinned and same-origin, without copying CSS or shipping another layout engine.
+Keep theme/header shell glue separate; use these primitives instead of handwritten flex/grid containers.
+Login and confirmed anonymous bootstrap registration set `my-auth-standalone` through `body_class`, preserving `super()`.
+Independent host logins must preserve this contract: override `body_class` with `{{ super() }} my-auth-standalone`.
+CSS imports and embedded cards never enable standalone layout; authenticated pages retain the host shell.
 
 ## Install and imports
 

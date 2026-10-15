@@ -1,6 +1,6 @@
 {% extends "app_factory/shell.html" %}
 
-{% block body_class %}{{ super() }}{% if bootstrap %} my-auth-standalone{% endif %}{% endblock %}
+{% block body_class %}{{ super() }}{% if anonymous_bootstrap %} my-auth-standalone{% endif %}{% endblock %}
 
 {% block title %}{{ t.register_page_title }}{% endblock %}
 
@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="{{ passkey_css_url }}">
 {% endblock %}
 
-{% block content_class %}{% if bootstrap %}passkey-content{% else %}{{ super() }}{% endif %}{% endblock %}
+{% block content_class %}{% if anonymous_bootstrap %}passkey-content{% else %}{{ super() }}{% endif %}{% endblock %}
 
 {% block loading_label %}{{ t.loading }}{% endblock %}
 
