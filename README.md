@@ -29,8 +29,9 @@ primitives instead of adding handwritten flex/grid containers.
 
 Standalone login and anonymous bootstrap registration set `my-auth-standalone` in
 app-factory's `body_class`. Overrides preserve `super()`; independent host logins add
-the marker explicitly. Embedded and authenticated pages keep host geometry;
-registration without `get_session_user` does too.
+the marker explicitly. Importing the CSS or embedding a card does not enable
+standalone layout. Authenticated pages and registration without `get_session_user`
+keep host geometry.
 
 ## Install and imports
 
