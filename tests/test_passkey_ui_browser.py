@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import pytest
 
 pytest.importorskip("playwright.sync_api")
+from fastapi import Request
 from playwright.sync_api import Page, sync_playwright
 
 STATIC = files("my_auth.fastapi_htmx").joinpath("static")
@@ -350,3 +351,139 @@ def test_rebinds_login_form_after_htmx_swap(browser_page: Page) -> None:
     )
     browser_page.get_by_role("button", name="Kontynuuj z kluczem dostępu").click()
     browser_page.wait_for_function("() => window.__conditionalCalls.length === 1")
+
+
+def _check_packaged_shell_layout(page: Page, css: str | None = None) -> None:
+    """Exercise real package templates/assets through the in-process ASGI app."""
+    from app_factory.fastapi import install_app_factory_ui
+    from app_factory.platform import (
+        PlatformConfig,
+        PlatformUser,
+        build_platform_context,
+    )
+    from fastapi import FastAPI
+    from fastapi.responses import HTMLResponse, RedirectResponse
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.testclient import TestClient
+    from jinja2 import ChoiceLoader, DictLoader
+    from my_auth.fastapi_htmx.config import PasskeyUiConfig
+    from my_auth.fastapi_htmx.templates import (
+        PasskeyTemplateRenderer,
+        build_template_environment,
+    )
+
+    app = FastAPI()
+    config = PasskeyUiConfig()
+    environment = build_template_environment(config)
+    environment.loader = ChoiceLoader(
+        [
+            DictLoader(
+                {
+                    "layout_account.html": (
+                        '{% extends "app_factory/product_shell.html" %}'
+                        "{% block content %}{{ panel | safe }}"
+                        '{% include "app_factory/platform_session.html" %}'
+                        "{% endblock %}"
+                    ),
+                    "layout_login_no_header.html": (
+                        '{% extends "login.html" %}{% block header %}{% endblock %}'
+                    ),
+                    "layout_register_no_header.html": (
+                        '{% extends "register.html" %}{% block header %}{% endblock %}'
+                    ),
+                }
+            ),
+            environment.loader,
+        ]
+    )
+    install_app_factory_ui(app, environments=[environment])
+    renderer = PasskeyTemplateRenderer(environment, config)
+    app.mount(config.static_mount_path, StaticFiles(directory=str(STATIC)))
+    posts: list[str] = []
+
+    @app.get("/auth/{ceremony}")
+    async def ceremony(request: Request, ceremony: str) -> Any:
+        template = f"{ceremony}.html"
+        if request.query_params.get("header") == "none":
+            template = f"layout_{ceremony}_no_header.html"
+        return await renderer._render(template, request)
+
+    @app.get("/account")
+    async def account(request: Request) -> Any:
+        context = build_platform_context(
+            PlatformConfig(app_name="Synthetic product"),
+            user=PlatformUser("Synthetic user"),
+            current_path="/account",
+        )
+        return HTMLResponse(
+            environment.get_template("layout_account.html").render(
+                **context, panel=await renderer.render_account_panel(request)
+            )
+        )
+
+    @app.post("/logout")
+    async def logout() -> Any:
+        posts.append("POST")
+        return RedirectResponse("/auth/login", status_code=303)
+
+    with TestClient(app) as client:
+
+        def handle(route: Any) -> None:
+            parsed = urlparse(route.request.url)
+            assert parsed.netloc == "layout.test"
+            if css is not None and parsed.path.endswith("/passkey-ui.css"):
+                route.fulfill(body=css, content_type="text/css")
+                return
+            target = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+            response = client.request(
+                route.request.method, target, follow_redirects=True
+            )
+            headers = dict(response.headers)
+            headers.pop("content-length", None)
+            route.fulfill(
+                status=response.status_code, headers=headers, body=response.content
+            )
+
+        page.route("**/*", handle)
+        try:
+            for width, height in ((1280, 800), (390, 844)):
+                page.set_viewport_size({"width": width, "height": height})
+                for name in ("login", "register"):
+                    for header in ("default", "none"):
+                        page.goto(
+                            f"http://layout.test/auth/{name}?header={header}",
+                            wait_until="networkidle",
+                        )
+                        main = page.locator(".app-main").bounding_box()
+                        card = page.locator(".passkey-card").bounding_box()
+                        assert main is not None and card is not None
+                        assert abs(main["x"]) < 1
+                        assert abs(main["width"] - width) < 1
+                        assert abs(card["x"] + card["width"] / 2 - width / 2) < 1
+                        assert (
+                            page.evaluate("document.documentElement.scrollWidth")
+                            <= width
+                        )
+                        if header == "default":
+                            bar = page.locator(".app-main-header").bounding_box()
+                            assert bar is not None and abs(bar["width"] - width) < 1
+                        else:
+                            assert page.locator(".app-main-header").count() == 0
+                page.goto("http://layout.test/account", wait_until="networkidle")
+                main = page.locator(".app-main").bounding_box()
+                sidebar = page.locator("#sidebar nav").bounding_box()
+                assert main is not None and sidebar is not None
+                if width >= 768:
+                    assert main["x"] >= sidebar["x"] + sidebar["width"] - 1
+                before = len(posts)
+                page.get_by_role("button", name="Log out", exact=True).click()
+                page.locator("[data-passkey-form=login]").wait_for()
+                assert len(posts) == before + 1
+        finally:
+            page.unroute("**/*", handle)
+
+
+def test_embedded_account_preserves_sidebar_and_standalone_geometry(
+    browser_page: Page,
+) -> None:
+    _check_packaged_shell_layout(browser_page)

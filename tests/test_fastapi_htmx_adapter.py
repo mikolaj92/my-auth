@@ -257,8 +257,9 @@ def test_packaged_css_centers_passkey_panel_in_app_factory_shell() -> None:
         ".l--center"
         in files("app_factory").joinpath("assets/lism-layout.css").read_text()
     )
-    # Full-width header: do not grid-center the entire .app-main when a top bar exists.
-    assert ".app-main:has(> .app-main-header):has(.passkey-card)" in css
+    # Standalone passkey pages own the full-width column; embedded panels do not.
+    assert ".app-main:has(> .app-main-content > .passkey-content)" in css
+    assert ".app-main:has(> .app-main-header):has(.passkey-card)" not in css
     assert "flex-direction: column" in css
 
 
@@ -785,7 +786,11 @@ def test_packaged_css_forces_full_width_header_on_app_shell() -> None:
         .joinpath("static/passkey-ui.css")
         .read_text(encoding="utf-8")
     )
-    assert "body.app-shell .app-main > .app-main-header" in css
+    assert (
+        ".app-main:has(> .app-main-content > .passkey-content) > .app-main-header"
+        in css
+    )
+    assert "body.app-shell .app-main > .app-main-header" not in css
     assert "align-self: stretch" in css
     # place-items centers only the panel, never the whole main column.
     assert ".passkey-shell" in css
