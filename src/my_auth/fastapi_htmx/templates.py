@@ -25,7 +25,7 @@ T = TypeVar("T")
 class PasskeyTemplateRenderer:
     environment: Environment
     config: PasskeyUiConfig
-    get_session_user: Callable[[Request], MaybeAwaitable[AuthUser | None]]
+    get_session_user: Callable[[Request], MaybeAwaitable[AuthUser | None]] | None = None
 
     async def render_login(self, request: Request) -> Response:
         return await self._render("login.html", request)
@@ -101,7 +101,7 @@ class PasskeyTemplateRenderer:
             credentials=credentials or [],
             bootstrap=(
                 await _maybe_await(self.get_session_user(request)) is None
-                if template_name == "register.html"
+                if template_name == "register.html" and self.get_session_user is not None
                 else False
             ),
             login_error_target_id=self.config.login_error_target_id,
