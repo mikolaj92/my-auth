@@ -3,7 +3,7 @@
  * Do not reintroduce pre-Basecoat class names (e.g. btn-primary, card-header).
  */
 
-.passkey-ui {
+body.my-auth-standalone {
   min-height: 100dvh;
   margin: 0;
   background: var(--color-background, var(--background, #fff));
@@ -16,7 +16,7 @@
  * Applying place-items:center on .app-main also shrink-wraps the top bar when
  * login shells include app-factory's default header (theme/locale controls).
  */
-.passkey-shell {
+body.my-auth-standalone .passkey-shell {
   box-sizing: border-box;
   width: 100%;
   flex: 1 1 auto;
@@ -25,8 +25,7 @@
 }
 
 /* Full-viewport center when there is no app-factory top bar. */
-body.passkey-ui .passkey-shell,
-.app-main:not(:has(> .app-main-header)) .passkey-shell {
+body.my-auth-standalone .app-main:not(:has(> .app-main-header)) .passkey-shell {
   min-height: 100dvh;
 }
 
@@ -34,9 +33,7 @@ body.passkey-ui .passkey-shell,
  * Login/register under app-factory shell: force a full-bleed column so the
  * sticky top bar spans the viewport (not a short centered strip).
  */
-body.app-shell > .app-main,
-body.app-shell .app-main:has(.passkey-card),
-.app-main:has(> .app-main-header):has(.passkey-card) {
+body.my-auth-standalone > .app-main {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -48,8 +45,7 @@ body.app-shell .app-main:has(.passkey-card),
   margin: 0;
 }
 
-body.app-shell .app-main > .app-main-header,
-.app-main:has(> .app-main-header):has(.passkey-card) > .app-main-header {
+body.my-auth-standalone .app-main > .app-main-header {
   box-sizing: border-box;
   width: 100%;
   max-width: none;
@@ -57,8 +53,7 @@ body.app-shell .app-main > .app-main-header,
   align-self: stretch;
 }
 
-body.app-shell .app-main > .app-main-content,
-.app-main:has(> .app-main-header):has(.passkey-card) > .app-main-content {
+body.my-auth-standalone .app-main > .app-main-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -69,9 +64,8 @@ body.app-shell .app-main > .app-main-content,
   max-width: none;
 }
 
-body.app-shell .app-main #main-content,
-.app-main:has(> .app-main-header):has(.passkey-card) #main-content,
-.passkey-content {
+body.my-auth-standalone .app-main #main-content,
+body.my-auth-standalone .passkey-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
