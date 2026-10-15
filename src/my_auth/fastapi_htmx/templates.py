@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal, TypeVar
 from urllib.parse import urlsplit
@@ -12,6 +12,7 @@ from fastapi import Request
 from jinja2 import ChoiceLoader, Environment, PackageLoader, select_autoescape
 from starlette.responses import HTMLResponse, Response
 
+from my_auth.fastapi import AuthUser
 from my_auth.passkeys import PasskeyCredential
 
 from .config import MaybeAwaitable, PasskeyUiConfig
@@ -24,6 +25,7 @@ T = TypeVar("T")
 class PasskeyTemplateRenderer:
     environment: Environment
     config: PasskeyUiConfig
+    get_session_user: Callable[[Request], MaybeAwaitable[AuthUser | None]]
 
     async def render_login(self, request: Request) -> Response:
         return await self._render("login.html", request)
@@ -97,6 +99,11 @@ class PasskeyTemplateRenderer:
             capability=capability if capability_valid else None,
             capability_valid=capability_valid,
             credentials=credentials or [],
+            bootstrap=(
+                await _maybe_await(self.get_session_user(request)) is None
+                if template_name == "register.html"
+                else False
+            ),
             login_error_target_id=self.config.login_error_target_id,
             register_error_target_id=self.config.register_error_target_id,
             conditional_ui=self.config.conditional_ui,

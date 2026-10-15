@@ -81,7 +81,11 @@ def install_passkey_ui(
     # apply_platform_context keep their config; kit-only installs get defaults.
     if "platform_paths" not in environment.globals:
         apply_platform_context(environment, PlatformConfig())
-    renderer = PasskeyTemplateRenderer(environment=environment, config=resolved_config)
+    renderer = PasskeyTemplateRenderer(
+        environment=environment,
+        config=resolved_config,
+        get_session_user=hooks.get_session_user,
+    )
     wrapped_hooks = PasskeyRouteHooks(
         get_session_user=hooks.get_session_user,
         prepare_registration=hooks.prepare_registration,

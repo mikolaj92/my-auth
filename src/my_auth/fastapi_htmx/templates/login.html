@@ -1,5 +1,7 @@
 {% extends "app_factory/shell.html" %}
 
+{% block body_class %}{{ super() }} my-auth-standalone{% endblock %}
+
 {% block title %}{{ t.login_page_title }}{% endblock %}
 
 {% block head_extra %}

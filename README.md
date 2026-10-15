@@ -27,6 +27,12 @@ same-origin; this package does not copy it or ship a separate layout engine.
 Keep theme/header shell glue separate from panel layout and use existing
 primitives instead of adding handwritten flex/grid containers.
 
+Standalone login and anonymous bootstrap registration set `body.my-auth-standalone`
+through app-factory's public `body_class` block. Overrides must preserve `super()`;
+an independent host login must explicitly add the marker in that block.
+Importing the stylesheet or embedding an account panel does not enable standalone
+geometry. Authenticated registration and credentials retain the host shell layout.
+
 ## Install and imports
 
 ```sh
