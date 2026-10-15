@@ -16,9 +16,9 @@ jobs:
           enable-cache: true
       - name: Check lockfile
         run: uv lock --check
-      - name: Run adapter suite
-        run: uv run --frozen pytest tests/test_fastapi_htmx_adapter.py
       - name: Install browser engines
         run: uv run --extra browser playwright install --with-deps chromium
+      - name: Run adapter suite
+        run: uv run --frozen pytest tests/test_fastapi_htmx_adapter.py
       - name: Run browser suite
         run: uv run --extra browser pytest tests/test_passkey_ui_browser.py
