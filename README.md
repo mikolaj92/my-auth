@@ -27,11 +27,10 @@ same-origin; this package does not copy it or ship a separate layout engine.
 Keep theme/header shell glue separate from panel layout and use existing
 primitives instead of adding handwritten flex/grid containers.
 
-Standalone login and anonymous bootstrap registration use `body.my-auth-standalone`
-via app-factory's `body_class`: overrides preserve `super()`; independent host logins
-add the marker explicitly. Embedded panels and authenticated pages retain host geometry.
-Direct `PasskeyTemplateRenderer(environment, config)` calls remain supported;
-without `get_session_user`, registration retains host geometry.
+Standalone login and anonymous bootstrap registration set `my-auth-standalone` in
+app-factory's `body_class`. Overrides preserve `super()`; independent host logins add
+the marker explicitly. Embedded and authenticated pages keep host geometry;
+registration without `get_session_user` does too.
 
 ## Install and imports
 
