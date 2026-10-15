@@ -28,9 +28,8 @@ Keep theme/header shell glue separate from panel layout and use existing
 primitives instead of adding handwritten flex/grid containers.
 
 Login and anonymous bootstrap registration use `body_class` marker `my-auth-standalone`.
-Overrides keep `super()`; independent host logins must add the marker explicitly.
-CSS imports and embedded cards do not enable standalone layout; authenticated pages
-and registration without `get_session_user` retain host geometry.
+Preserve `super()` in overrides; independent host logins must add the marker.
+CSS imports and embedded cards never enable standalone layout.
 
 ## Install and imports
 
