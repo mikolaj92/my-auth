@@ -90,7 +90,9 @@ def _validate_claim(*, token: str, flow_id: str, expected_purpose: str) -> None:
 
 
 def _token_hash(token: str) -> str:
-    return hashlib.sha256(b"my-auth:enrollment-capability:v1\0" + token.encode()).hexdigest()
+    return hashlib.sha256(
+        b"my-auth:enrollment-capability:v1\0" + token.encode()
+    ).hexdigest()
 
 
 def _new_issued(
@@ -153,9 +155,7 @@ class MemoryEnrollmentCapabilityStore:
         flow_id: str,
         expected_purpose: EnrollmentPurpose,
     ) -> EnrollmentCapability:
-        _validate_claim(
-            token=token, flow_id=flow_id, expected_purpose=expected_purpose
-        )
+        _validate_claim(token=token, flow_id=flow_id, expected_purpose=expected_purpose)
         digest = _token_hash(token)
         now = _now_utc(self._now)
         with self._lock:
@@ -354,9 +354,7 @@ class SQLiteEnrollmentCapabilityStore:
         flow_id: str,
         expected_purpose: EnrollmentPurpose,
     ) -> EnrollmentCapability:
-        _validate_claim(
-            token=token, flow_id=flow_id, expected_purpose=expected_purpose
-        )
+        _validate_claim(token=token, flow_id=flow_id, expected_purpose=expected_purpose)
         now = _now_utc(self._now)
         with self._connection(mutation=True) as connection:
             row = connection.execute(

@@ -368,9 +368,9 @@ def inspect_sqlite_schema(connection: sqlite3.Connection) -> SQLiteSchemaInspect
             for name, columns in _CANONICAL_COLUMNS.items()
             if name != "passkey_challenges"
         }
-        expected_v2["passkey_challenges"] = _CANONICAL_COLUMNS[
-            "passkey_challenges"
-        ][:-2]
+        expected_v2["passkey_challenges"] = _CANONICAL_COLUMNS["passkey_challenges"][
+            :-2
+        ]
         actual_v2 = tuple(
             (
                 str(row[1]),

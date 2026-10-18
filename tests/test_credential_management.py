@@ -70,9 +70,7 @@ def test_lists_labels_and_removes_only_owned_credentials(stores) -> None:
     )
     assert labeled.label == "Laptop"
     with pytest.raises(CredentialNotFound):
-        service.label_credential(
-            user_id="own", credential_id=b"other", label="Stolen"
-        )
+        service.label_credential(user_id="own", credential_id=b"other", label="Stolen")
 
     service.remove_credential(user_id="own", credential_id=b"second")
     with pytest.raises(CredentialMutationDenied):
