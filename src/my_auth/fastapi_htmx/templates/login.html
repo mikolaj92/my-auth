@@ -8,8 +8,7 @@
   <link rel="stylesheet" href="{{ passkey_css_url }}">
 {% endblock %}
 
-{# Drop app-content-inner max-width so the login column stays full-bleed under the top bar. #}
-{% block content_class %}passkey-content{% endblock %}
+{% block content_class %}{{ super() }} passkey-content{% endblock %}
 
 {% block loading_label %}{{ t.loading }}{% endblock %}
 

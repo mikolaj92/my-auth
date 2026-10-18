@@ -770,13 +770,12 @@ def test_phone_login_uses_native_webauthn_hybrid_hint_and_abort_boundary() -> No
     assert "htmx:afterSwap" in controller
 
 
-def test_login_uses_full_width_content_class_not_app_content_inner() -> None:
+def test_login_preserves_shell_content_class() -> None:
     app, _, _ = _app()
     client = TestClient(app)
-    html = client.get("/login").text
-    assert 'class="passkey-content"' in html
-    # Avoid the factory content max-width wrapper on the login column.
-    assert 'id="main-content"\n        class="app-content-inner"' not in html
+    for path in ("/login", "/register"):
+        html = client.get(path).text
+        assert 'class="app-content-inner passkey-content"' in html
 
 
 def test_packaged_css_forces_full_width_header_on_app_shell() -> None:
