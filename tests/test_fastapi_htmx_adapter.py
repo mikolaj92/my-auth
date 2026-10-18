@@ -776,6 +776,7 @@ def test_login_preserves_shell_content_class() -> None:
     for path in ("/login", "/register"):
         html = client.get(path).text
         assert 'class="app-content-inner passkey-content"' in html
+        assert 'id="main-content"\n        class="app-content-inner"' not in html
 
 
 def test_packaged_css_forces_full_width_header_on_app_shell() -> None:
