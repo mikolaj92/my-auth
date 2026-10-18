@@ -51,11 +51,14 @@ def assert_capability_contract(
     )
     assert claimed.subject == "user-1"
     assert claimed.claimed_flow_id == "flow-1"
-    assert store.claim(
-        token=issued.token,
-        flow_id="flow-1",
-        expected_purpose="invitation",
-    ) == claimed
+    assert (
+        store.claim(
+            token=issued.token,
+            flow_id="flow-1",
+            expected_purpose="invitation",
+        )
+        == claimed
+    )
 
     with pytest.raises(EnrollmentCapabilityNotFound):
         store.claim(
@@ -93,15 +96,16 @@ def assert_capability_contract(
         expected_purpose="account_recovery",
     )
     assert store.release(flow_id="release-flow") is True
-    assert store.claim(
-        token=releasable.token,
-        flow_id="replacement-flow",
-        expected_purpose="account_recovery",
-    ).subject == "user-2"
-
-    revoked = store.issue(
-        subject="user-3", purpose="invitation", ttl_seconds=300
+    assert (
+        store.claim(
+            token=releasable.token,
+            flow_id="replacement-flow",
+            expected_purpose="account_recovery",
+        ).subject
+        == "user-2"
     )
+
+    revoked = store.issue(subject="user-3", purpose="invitation", ttl_seconds=300)
     assert store.revoke(revoked.capability.capability_id) is True
     assert store.revoke(revoked.capability.capability_id) is False
     with pytest.raises(EnrollmentCapabilityNotFound):
@@ -111,9 +115,7 @@ def assert_capability_contract(
             expected_purpose="invitation",
         )
 
-    expired = store.issue(
-        subject="user-4", purpose="invitation", ttl_seconds=1
-    )
+    expired = store.issue(subject="user-4", purpose="invitation", ttl_seconds=1)
     clock.value += timedelta(seconds=2)
     with pytest.raises(EnrollmentCapabilityNotFound):
         store.claim(
@@ -144,9 +146,7 @@ def test_sqlite_capability_store_contract(tmp_path: Path) -> None:
 def test_sqlite_persists_only_a_hash_of_the_bearer_token(tmp_path: Path) -> None:
     database = tmp_path / "capabilities.sqlite3"
     store = SQLiteEnrollmentCapabilityStore(database)
-    issued = store.issue(
-        subject="user-1", purpose="account_recovery", ttl_seconds=60
-    )
+    issued = store.issue(subject="user-1", purpose="account_recovery", ttl_seconds=60)
     with sqlite3.connect(database) as connection:
         row = connection.execute(
             "SELECT token_hash FROM passkey_enrollment_capabilities"
